@@ -1,0 +1,2758 @@
+{
+ "case": "rail_tutu_compartment",
+ "family": "RAIL",
+ "source": "tutu_mcp",
+ "source_code": "tutu_mcp",
+ "note": "Живая выдача Туту view=full: 10 поездов, купейные тарифные строки с 2К/2У",
+ "recorded_at": "2026-08-07",
+ "query": {
+  "origin_code": "MOW",
+  "origin_name": "Москва",
+  "origin_rzd_code": "2000000",
+  "destination_code": "AER",
+  "destination_name": "Сочи",
+  "destination_rzd_code": "2064130",
+  "service_date": "2026-08-21",
+  "passengers": 1
+ },
+ "payload": {
+  "offers": [
+   {
+    "offer_id": "70bad14158115b5f9a8eda8cadf65bc5",
+    "transport": "railway",
+    "price": {
+     "amount": 5735.68,
+     "currency": "RUB"
+    },
+    "duration_min": 2233,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000005&arr_st=2064130&tn=587%D0%9C&date=21.08.2026+15:54:00",
+    "departure_at": "2026-08-21T15:54:00+03:00",
+    "arrival_at": "2026-08-23T05:07:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Павелецкий вокзал (2000005)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T15:54:00+03:00",
+      "arrival_at": "2026-08-23T05:07:00+03:00",
+      "duration_min": 2233,
+      "segments": [
+       {
+        "from": "Москва — Павелецкий вокзал (2000005)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T15:54:00+03:00",
+        "arrival_at": "2026-08-23T05:07:00+03:00",
+        "duration_min": 2233,
+        "carrier": "ФПК",
+        "voyage_no": "587М",
+        "from_geo_point_id": 2957766,
+        "to_geo_point_id": 2961597,
+        "review_summary": {
+         "rating": 8.1,
+         "review_count": 17,
+         "label": "⭐ 8.1/10 · 17 отзывов",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "587М",
+         "scale": 10,
+         "feedback_key": "587М"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "1485760e5789d9aac7a88f47fffadbb1",
+      "offer_hash": "70bad14158115b5f9a8eda8cadf65bc5",
+      "price": {
+       "amount": 5735.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 172.07,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "d66639e6d293d9ef7ca6c3fb1b8968f0",
+      "offer_hash": "70bad14158115b5f9a8eda8cadf65bc5",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "bbf3ec99511746582ac7dfc873b18057",
+      "offer_hash": "70bad14158115b5f9a8eda8cadf65bc5",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "f326e0d7855eb0f6ffe9134516a67352",
+      "offer_hash": "70bad14158115b5f9a8eda8cadf65bc5",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 15
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000005",
+     "arrival_station_code": "2064130",
+     "train_number": "587М",
+     "departure_at": "2026-08-21T15:54:00+03:00",
+     "departure_geo_point_id": 2957766,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "70bad14158115b5f9a8eda8cadf65bc5",
+     "segment_hash": "e08b714ca84a659f440e78318f9cce58",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "eef10ed0-7ead-50c5-9661-406a7ca52e99",
+     "card_id": "1eb9116a8758dc62fcaf3b4229c16712"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000005",
+     "arrival_station_code": "2064130",
+     "train_number": "587М",
+     "departure_at": "2026-08-21T15:54:00+03:00",
+     "price": {
+      "amount": 5735.68,
+      "currency": "RUB"
+     },
+     "title": "Поезд 587М",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 2233,
+     "arrival_at": "2026-08-23T05:07:00+03:00",
+     "review_summary": {
+      "rating": 8.1,
+      "review_count": 17,
+      "label": "⭐ 8.1/10 · 17 отзывов",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "587М",
+      "scale": 10,
+      "feedback_key": "587М"
+     }
+    },
+    "cashback": {
+     "amount": 172.07,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 8.1,
+     "review_count": 17,
+     "label": "⭐ 8.1/10 · 17 отзывов",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "587М",
+     "scale": 10,
+     "feedback_key": "587М"
+    }
+   },
+   {
+    "offer_id": "1f7f25b542042a343f86a6abde185027",
+    "transport": "railway",
+    "price": {
+     "amount": 7232.92,
+     "currency": "RUB"
+    },
+    "duration_min": 2397,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000003&arr_st=2064130&tn=542%D0%9C&date=21.08.2026+15:34:00",
+    "departure_at": "2026-08-21T15:34:00+03:00",
+    "arrival_at": "2026-08-23T07:31:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Казанский вокзал (2000003)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T15:34:00+03:00",
+      "arrival_at": "2026-08-23T07:31:00+03:00",
+      "duration_min": 2397,
+      "segments": [
+       {
+        "from": "Москва — Казанский вокзал (2000003)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T15:34:00+03:00",
+        "arrival_at": "2026-08-23T07:31:00+03:00",
+        "duration_min": 2397,
+        "carrier": "ФПК",
+        "voyage_no": "542М",
+        "from_geo_point_id": 2957765,
+        "to_geo_point_id": 2961597,
+        "review_summary": {
+         "rating": 7.5,
+         "review_count": 844,
+         "label": "⭐ 7.5/10 · 844 отзыва",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "542М",
+         "scale": 10,
+         "feedback_key": "542М"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "768c4da5e21cf193b798619eaf4cffb0",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "faf5f14b82e27fe94a0d3f64caa3c5d3",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "3ec87949b74f3aaed808abd223023ab5",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "eaa0e4ca2db9c8d37638a38f34006674",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "6788fc301be97e2144b6bc221faf579e",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "f10fa537bb22c57cda3ef92d9873dcf8",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 5
+     },
+     {
+      "variant_id": "e81af781e4207d4408475fdb6283e5d1",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "6317b44d00c03bcd0c225b119196e6f9",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 7
+     },
+     {
+      "variant_id": "38d99b7da8a667594fdecada37de66ea",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 4
+     },
+     {
+      "variant_id": "8fd51c9b391807c1eee754ac167b0712",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "68c8708ae89fc5e7da8bcfb936637b90",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "33b12a8991526d5e614021eff3805106",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 8952.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 268.58,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "774ef1f5e8f376ea406cc3cd59f79f97",
+      "offer_hash": "1f7f25b542042a343f86a6abde185027",
+      "price": {
+       "amount": 11583.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 347.51,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "542М",
+     "departure_at": "2026-08-21T15:34:00+03:00",
+     "departure_geo_point_id": 2957765,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "1f7f25b542042a343f86a6abde185027",
+     "segment_hash": "005be44c921ed9f59338dc10c22a3f61",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "eca344d9-240d-5bc1-a41c-c1a98e8c6ed3",
+     "card_id": "3303277af2290d7050f1c92eea282195"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "542М",
+     "departure_at": "2026-08-21T15:34:00+03:00",
+     "price": {
+      "amount": 7232.92,
+      "currency": "RUB"
+     },
+     "title": "Поезд 542М",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 2397,
+     "arrival_at": "2026-08-23T07:31:00+03:00",
+     "review_summary": {
+      "rating": 7.5,
+      "review_count": 844,
+      "label": "⭐ 7.5/10 · 844 отзыва",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "542М",
+      "scale": 10,
+      "feedback_key": "542М"
+     }
+    },
+    "cashback": {
+     "amount": 216.98,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 7.5,
+     "review_count": 844,
+     "label": "⭐ 7.5/10 · 844 отзыва",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "542М",
+     "scale": 10,
+     "feedback_key": "542М"
+    }
+   },
+   {
+    "offer_id": "4fd4ed83ad44d6f072863e5446570c3e",
+    "transport": "railway",
+    "price": {
+     "amount": 7232.92,
+     "currency": "RUB"
+    },
+    "duration_min": 2149,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000005&arr_st=2064130&tn=471%D0%9C&date=21.08.2026+16:35:00",
+    "departure_at": "2026-08-21T16:35:00+03:00",
+    "arrival_at": "2026-08-23T04:24:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Павелецкий вокзал (2000005)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T16:35:00+03:00",
+      "arrival_at": "2026-08-23T04:24:00+03:00",
+      "duration_min": 2149,
+      "segments": [
+       {
+        "from": "Москва — Павелецкий вокзал (2000005)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T16:35:00+03:00",
+        "arrival_at": "2026-08-23T04:24:00+03:00",
+        "duration_min": 2149,
+        "carrier": "ФПК",
+        "voyage_no": "471М",
+        "from_geo_point_id": 2957766,
+        "to_geo_point_id": 2961597,
+        "review_summary": {
+         "rating": 7.0,
+         "review_count": 831,
+         "label": "⭐ 7/10 · 831 отзыв",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "471М",
+         "scale": 10,
+         "feedback_key": "471М"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "34a44ffd0d5c05ab7417edac98441ec2",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "fe3abe9371e5e1bbd9fae0873d639ebf",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "3592fc51dfa2b427f64a11d597bcbcd3",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 7232.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 216.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "ca27872c12b9817b58dee779540898b4",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 8
+     },
+     {
+      "variant_id": "d73cef71efbaa677118d4c01ff8b1975",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "f70195d4a5c3682dda62a455e4c32a92",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "78e5480e7a3c777eef6f7a64cddc535b",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 8
+     },
+     {
+      "variant_id": "0b89e6af99329a4e8396f814f7c7ddc0",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "be48d9722a7962298aa1147557e65622",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 7
+     },
+     {
+      "variant_id": "a3911c81722a8df894eda32fa4b7bfba",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 5
+     },
+     {
+      "variant_id": "41ed3abd5220c006323ea33138efd33d",
+      "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+      "price": {
+       "amount": 8609.92,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 258.29,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000005",
+     "arrival_station_code": "2064130",
+     "train_number": "471М",
+     "departure_at": "2026-08-21T16:35:00+03:00",
+     "departure_geo_point_id": 2957766,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "4fd4ed83ad44d6f072863e5446570c3e",
+     "segment_hash": "b1b465fc5c5bc9e5eb72f15f851bdc34",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "86021b36-6f98-5b6f-816d-9dd5234d0ced",
+     "card_id": "6fc105bd63ca1a940f6b927637c8e5a6"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000005",
+     "arrival_station_code": "2064130",
+     "train_number": "471М",
+     "departure_at": "2026-08-21T16:35:00+03:00",
+     "price": {
+      "amount": 7232.92,
+      "currency": "RUB"
+     },
+     "title": "Поезд 471М",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 2149,
+     "arrival_at": "2026-08-23T04:24:00+03:00",
+     "review_summary": {
+      "rating": 7.0,
+      "review_count": 831,
+      "label": "⭐ 7/10 · 831 отзыв",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "471М",
+      "scale": 10,
+      "feedback_key": "471М"
+     }
+    },
+    "cashback": {
+     "amount": 216.98,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 7.0,
+     "review_count": 831,
+     "label": "⭐ 7/10 · 831 отзыв",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "471М",
+     "scale": 10,
+     "feedback_key": "471М"
+    }
+   },
+   {
+    "offer_id": "f5a927a3568833cf9061a928b4273ba2",
+    "transport": "railway",
+    "price": {
+     "amount": 8329.32,
+     "currency": "RUB"
+    },
+    "duration_min": 2507,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2001025&arr_st=2064130&tn=225%D0%90&date=21.08.2026+01:19:00",
+    "departure_at": "2026-08-21T01:19:00+03:00",
+    "arrival_at": "2026-08-22T19:06:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Восточный вокзал (2001025)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T01:19:00+03:00",
+      "arrival_at": "2026-08-22T19:06:00+03:00",
+      "duration_min": 2507,
+      "segments": [
+       {
+        "from": "Москва — Восточный вокзал (2001025)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T01:19:00+03:00",
+        "arrival_at": "2026-08-22T19:06:00+03:00",
+        "duration_min": 2507,
+        "carrier": "ФПК",
+        "voyage_no": "225А",
+        "from_geo_point_id": 6481916,
+        "to_geo_point_id": 2961597,
+        "review_summary": {
+         "rating": 7.8,
+         "review_count": 138,
+         "label": "⭐ 7.8/10 · 138 отзывов",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "225А",
+         "scale": 10,
+         "feedback_key": "225А"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "a0395bddd9a53a89e54971cddb0d1509",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 8329.32,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 249.87,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "5e426bf49075241e2ce6fcb48dcabb29",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 8329.32,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 249.87,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "9bb91fa23e2387417daed68bf850efe3",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 8329.32,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 249.87,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "3359c6bf93306f1c6b990b59ee4994fa",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 8329.32,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 249.87,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "c14347706f520d8bf294d39e95d57f77",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 8329.32,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 249.87,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "3ba7c5641f2562500a6d1222b6233962",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "ccf9777ed8b7d9e3b7bbecf7c2d1c778",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "32e8005828a63dca602d2f7d5d7350f2",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 7
+     },
+     {
+      "variant_id": "95bb2eebebb610b9cb64f4dc192a7cb9",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "a0bc14d5b3e3f10695e2191645a33019",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "19b2ad8ea1385a73ab632fe90b6f392a",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "cc5f9a0229c02927e66f1044214a44a9",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "af4c52f53d495c5c95aa2b9a1e3dd299",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 5
+     },
+     {
+      "variant_id": "d1586b90dd24f30086aadc7a39348440",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "554225f7638f9efe323369a06d0fe4bd",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "c2e449639bed6ae82ca8fa237ff97fb6",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 12
+     },
+     {
+      "variant_id": "ab44d18b580513847ccc7de8c366bc2b",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 9580.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 287.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 5
+     },
+     {
+      "variant_id": "4603de6eaf8bc2b2e118b7cdddc77c7d",
+      "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+      "price": {
+       "amount": 12067.38,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 362.02,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2У",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2001025",
+     "arrival_station_code": "2064130",
+     "train_number": "225А",
+     "departure_at": "2026-08-21T01:19:00+03:00",
+     "departure_geo_point_id": 6481916,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "f5a927a3568833cf9061a928b4273ba2",
+     "segment_hash": "c137e4f4cab933423e0b2bdca35ef1e7",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "ec2b42b1-b851-5163-88b6-f1b7bb1dffde",
+     "card_id": "34dc3dabb7d1679648c5fd06f0d5fe18"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2001025",
+     "arrival_station_code": "2064130",
+     "train_number": "225А",
+     "departure_at": "2026-08-21T01:19:00+03:00",
+     "price": {
+      "amount": 8329.32,
+      "currency": "RUB"
+     },
+     "title": "Поезд 225А",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 2507,
+     "arrival_at": "2026-08-22T19:06:00+03:00",
+     "review_summary": {
+      "rating": 7.8,
+      "review_count": 138,
+      "label": "⭐ 7.8/10 · 138 отзывов",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "225А",
+      "scale": 10,
+      "feedback_key": "225А"
+     }
+    },
+    "cashback": {
+     "amount": 249.87,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 7.8,
+     "review_count": 138,
+     "label": "⭐ 7.8/10 · 138 отзывов",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "225А",
+     "scale": 10,
+     "feedback_key": "225А"
+    }
+   },
+   {
+    "offer_id": "0a3a98fd94028ace8083ac1d0a137794",
+    "transport": "railway",
+    "price": {
+     "amount": 8729.62,
+     "currency": "RUB"
+    },
+    "duration_min": 2357,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2001025&arr_st=2064130&tn=099%D0%90&date=21.08.2026+05:04:00",
+    "departure_at": "2026-08-21T05:04:00+03:00",
+    "arrival_at": "2026-08-22T20:21:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Восточный вокзал (2001025)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T05:04:00+03:00",
+      "arrival_at": "2026-08-22T20:21:00+03:00",
+      "duration_min": 2357,
+      "segments": [
+       {
+        "from": "Москва — Восточный вокзал (2001025)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T05:04:00+03:00",
+        "arrival_at": "2026-08-22T20:21:00+03:00",
+        "duration_min": 2357,
+        "carrier": "ФПК",
+        "voyage_no": "099А",
+        "from_geo_point_id": 6481916,
+        "to_geo_point_id": 2961597,
+        "review_summary": {
+         "rating": 7.2,
+         "review_count": 1918,
+         "label": "⭐ 7.2/10 · 1 918 отзывов",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "099А",
+         "scale": 10,
+         "feedback_key": "099А"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "6c0142f26be262485cc166f57242e268",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 8729.62,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 261.88,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "980f50d59283e726885652fce42bd9d4",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 8729.62,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 261.88,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "9ccf9a250fc69dc94f8ead47f1ef0d2f",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 9377.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 281.33,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "df7c258ab615fea646f1c7e02928b48c",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 9377.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 281.33,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "81ee01e71e698bce72edc6e6e878d029",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 10080.88,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 302.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "79e5e74337fa1515770a2e24d0243d64",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 10080.88,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 302.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 5
+     },
+     {
+      "variant_id": "e7ea23c944793a9cd2e3668f78f4a838",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 10080.88,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 302.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "dc905bad55568bf8e3fd87938618f68c",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 10080.88,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 302.42,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ш",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 12
+     },
+     {
+      "variant_id": "09e1daeea10b88aa9d492838c9817e41",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 11551.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 346.55,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "e9268de111c9755ae78c8b018a5a40c0",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 11551.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 346.55,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "f9854ca58e6a1fe3bad6d98dd4b595fe",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 11551.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 346.55,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "4f3f4555bbf594e769a46078baec8cbe",
+      "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+      "price": {
+       "amount": 11551.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 346.55,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 6
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2001025",
+     "arrival_station_code": "2064130",
+     "train_number": "099А",
+     "departure_at": "2026-08-21T05:04:00+03:00",
+     "departure_geo_point_id": 6481916,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "0a3a98fd94028ace8083ac1d0a137794",
+     "segment_hash": "a74b99687dd19326de88d35ae6551abd",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "66d8c044-f84f-59ac-b41a-9ee4719e3504",
+     "card_id": "632947b59c10b996cb0edc9948458fe0"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2001025",
+     "arrival_station_code": "2064130",
+     "train_number": "099А",
+     "departure_at": "2026-08-21T05:04:00+03:00",
+     "price": {
+      "amount": 8729.62,
+      "currency": "RUB"
+     },
+     "title": "Поезд 099А",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 2357,
+     "arrival_at": "2026-08-22T20:21:00+03:00",
+     "review_summary": {
+      "rating": 7.2,
+      "review_count": 1918,
+      "label": "⭐ 7.2/10 · 1 918 отзывов",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "099А",
+      "scale": 10,
+      "feedback_key": "099А"
+     }
+    },
+    "cashback": {
+     "amount": 261.88,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 7.2,
+     "review_count": 1918,
+     "label": "⭐ 7.2/10 · 1 918 отзывов",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "099А",
+     "scale": 10,
+     "feedback_key": "099А"
+    }
+   },
+   {
+    "offer_id": "c062b94bd1b1ebb10e4a6763f809089e",
+    "transport": "railway",
+    "price": {
+     "amount": 11741.68,
+     "currency": "RUB"
+    },
+    "duration_min": 2481,
+    "carriers": [
+     "ГРАНД"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000005&arr_st=2064130&tn=197%D0%A9&date=21.08.2026+00:55:00",
+    "departure_at": "2026-08-21T00:55:00+03:00",
+    "arrival_at": "2026-08-22T18:16:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Павелецкий вокзал (2000005)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T00:55:00+03:00",
+      "arrival_at": "2026-08-22T18:16:00+03:00",
+      "duration_min": 2481,
+      "segments": [
+       {
+        "from": "Москва — Павелецкий вокзал (2000005)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T00:55:00+03:00",
+        "arrival_at": "2026-08-22T18:16:00+03:00",
+        "duration_min": 2481,
+        "carrier": "ГРАНД",
+        "voyage_no": "197Щ",
+        "from_geo_point_id": 2957766,
+        "to_geo_point_id": 2961597,
+        "review_summary": {
+         "rating": 7.4,
+         "review_count": 10,
+         "label": "⭐ 7.4/10 · 10 отзывов",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "197Щ",
+         "scale": 10,
+         "feedback_key": "197Щ"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "2572e09101028ae625b59efb670f5943",
+      "offer_hash": "c062b94bd1b1ebb10e4a6763f809089e",
+      "price": {
+       "amount": 11741.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 352.25,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 195
+     },
+     {
+      "variant_id": "e5af4e15cffffccc8e94813146d8ac8c",
+      "offer_hash": "c062b94bd1b1ebb10e4a6763f809089e",
+      "price": {
+       "amount": 12856.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 385.7,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2К",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 182
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000005",
+     "arrival_station_code": "2064130",
+     "train_number": "197Щ",
+     "departure_at": "2026-08-21T00:55:00+03:00",
+     "departure_geo_point_id": 2957766,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "c062b94bd1b1ebb10e4a6763f809089e",
+     "segment_hash": "b598b1ad6006af370500c29c11fbbda3",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "b122555e-2fed-52f9-8d9d-c288270727e9",
+     "card_id": "1e1e7d8482d582c57f2cc9ce726416cf"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000005",
+     "arrival_station_code": "2064130",
+     "train_number": "197Щ",
+     "departure_at": "2026-08-21T00:55:00+03:00",
+     "price": {
+      "amount": 11741.68,
+      "currency": "RUB"
+     },
+     "title": "Поезд 197Щ",
+     "carriers": [
+      "ГРАНД"
+     ],
+     "duration_min": 2481,
+     "arrival_at": "2026-08-22T18:16:00+03:00",
+     "review_summary": {
+      "rating": 7.4,
+      "review_count": 10,
+      "label": "⭐ 7.4/10 · 10 отзывов",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "197Щ",
+      "scale": 10,
+      "feedback_key": "197Щ"
+     }
+    },
+    "cashback": {
+     "amount": 352.25,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 7.4,
+     "review_count": 10,
+     "label": "⭐ 7.4/10 · 10 отзывов",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "197Щ",
+     "scale": 10,
+     "feedback_key": "197Щ"
+    }
+   },
+   {
+    "offer_id": "ce8575109b1b884a5d0d57b315e75ccc",
+    "transport": "railway",
+    "price": {
+     "amount": 12027.78,
+     "currency": "RUB"
+    },
+    "duration_min": 1383,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000003&arr_st=2064130&tn=104%D0%92&date=21.08.2026+10:40:00",
+    "departure_at": "2026-08-21T10:40:00+03:00",
+    "arrival_at": "2026-08-22T09:43:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Казанский вокзал (2000003)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T10:40:00+03:00",
+      "arrival_at": "2026-08-22T09:43:00+03:00",
+      "duration_min": 1383,
+      "segments": [
+       {
+        "from": "Москва — Казанский вокзал (2000003)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T10:40:00+03:00",
+        "arrival_at": "2026-08-22T09:43:00+03:00",
+        "duration_min": 1383,
+        "carrier": "ФПК",
+        "voyage_no": "104В",
+        "from_geo_point_id": 2957765,
+        "to_geo_point_id": 2961597,
+        "vehicle_meta": {
+         "name": "Двухэтажный",
+         "is_premium": true,
+         "is_double_decker": true
+        },
+        "review_summary": {
+         "rating": 8.9,
+         "review_count": 3824,
+         "label": "⭐ 8.9/10 · 3 824 отзыва",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "104В",
+         "scale": 10,
+         "feedback_key": "104В"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "6d8c09322021040c6fd3efcbff70aa02",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 12027.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 360.83,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Х",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "bd74df8ea33d2bb00328f79f6322353c",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 12732.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 381.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "14c6cd46fe36e3b7ba2159c1a3d720a3",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 14420.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 432.62,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "cccf5eb4161b7b83e6770d72733ce119",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 14420.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 432.62,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "3ea1fe5fa90f1b8a973e19b11eed4fba",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 14420.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 432.62,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Х",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "4949b45d96f062429919e1bf391b0957",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 14420.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 432.62,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Х",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "50146d4feed936cb04e3655ab7a568f2",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 6
+     },
+     {
+      "variant_id": "2d3f99d30a4d61b35bb23c0e1a7501ed",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "12d6e1836c7428f89e1ce364f5310d4a",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "8ca8c9b9ff969cf5202c4b7d140c2300",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "8e60259ce39cd0a387cadc3668f15b8d",
+      "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "104В",
+     "departure_at": "2026-08-21T10:40:00+03:00",
+     "departure_geo_point_id": 2957765,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "ce8575109b1b884a5d0d57b315e75ccc",
+     "segment_hash": "737b849d3be5f2d1e7695fb546bfb616",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "d4b49d53-f9ab-5015-b913-ba3ccd6cb193",
+     "card_id": "0355ef054591d5c49af09aee9ade026e"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "104В",
+     "departure_at": "2026-08-21T10:40:00+03:00",
+     "price": {
+      "amount": 12027.78,
+      "currency": "RUB"
+     },
+     "title": "Поезд 104В",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 1383,
+     "arrival_at": "2026-08-22T09:43:00+03:00",
+     "review_summary": {
+      "rating": 8.9,
+      "review_count": 3824,
+      "label": "⭐ 8.9/10 · 3 824 отзыва",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "104В",
+      "scale": 10,
+      "feedback_key": "104В"
+     }
+    },
+    "cashback": {
+     "amount": 360.83,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 8.9,
+     "review_count": 3824,
+     "label": "⭐ 8.9/10 · 3 824 отзыва",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "104В",
+     "scale": 10,
+     "feedback_key": "104В"
+    }
+   },
+   {
+    "offer_id": "844580421fe4643529a0575961336ea7",
+    "transport": "railway",
+    "price": {
+     "amount": 12732.78,
+     "currency": "RUB"
+    },
+    "duration_min": 1367,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000003&arr_st=2064130&tn=102%D0%9C&date=21.08.2026+14:30:00",
+    "departure_at": "2026-08-21T14:30:00+03:00",
+    "arrival_at": "2026-08-22T13:17:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Казанский вокзал (2000003)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T14:30:00+03:00",
+      "arrival_at": "2026-08-22T13:17:00+03:00",
+      "duration_min": 1367,
+      "segments": [
+       {
+        "from": "Москва — Казанский вокзал (2000003)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T14:30:00+03:00",
+        "arrival_at": "2026-08-22T13:17:00+03:00",
+        "duration_min": 1367,
+        "carrier": "ФПК",
+        "voyage_no": "102М",
+        "from_geo_point_id": 2957765,
+        "to_geo_point_id": 2961597,
+        "vehicle_meta": {
+         "name": "Премиум",
+         "is_premium": true
+        },
+        "review_summary": {
+         "rating": 8.9,
+         "review_count": 2089,
+         "label": "⭐ 8.9/10 · 2 089 отзывов",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "102М",
+         "scale": 10,
+         "feedback_key": "102М"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "38e36cce46ee048c254d7548834da00b",
+      "offer_hash": "844580421fe4643529a0575961336ea7",
+      "price": {
+       "amount": 12732.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 381.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "4a2cf67c946a74d402d40e1415cd144c",
+      "offer_hash": "844580421fe4643529a0575961336ea7",
+      "price": {
+       "amount": 12732.78,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 381.98,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": false,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "b99141f2be0d449b2c1150c97b9ffb00",
+      "offer_hash": "844580421fe4643529a0575961336ea7",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 2
+     },
+     {
+      "variant_id": "13213089b8bea84ae25d3a2e5622b1ab",
+      "offer_hash": "844580421fe4643529a0575961336ea7",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 9
+     },
+     {
+      "variant_id": "8b8cd837fec08b5f1aca8cc35c5f06f6",
+      "offer_hash": "844580421fe4643529a0575961336ea7",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     },
+     {
+      "variant_id": "58013bbecc30bcb71c4e0c2c308542c9",
+      "offer_hash": "844580421fe4643529a0575961336ea7",
+      "price": {
+       "amount": 15125.68,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 453.77,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 21
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "102М",
+     "departure_at": "2026-08-21T14:30:00+03:00",
+     "departure_geo_point_id": 2957765,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "844580421fe4643529a0575961336ea7",
+     "segment_hash": "28330342a5e1069f87f32939a0aeeaeb",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "b61cda66-b5b2-5b7b-82af-8da61d8db962",
+     "card_id": "32e5189cbdb085adad0377c2165a30ba"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "102М",
+     "departure_at": "2026-08-21T14:30:00+03:00",
+     "price": {
+      "amount": 12732.78,
+      "currency": "RUB"
+     },
+     "title": "Поезд 102М",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 1367,
+     "arrival_at": "2026-08-22T13:17:00+03:00",
+     "review_summary": {
+      "rating": 8.9,
+      "review_count": 2089,
+      "label": "⭐ 8.9/10 · 2 089 отзывов",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "102М",
+      "scale": 10,
+      "feedback_key": "102М"
+     }
+    },
+    "cashback": {
+     "amount": 381.98,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "rating": 8.9,
+     "review_count": 2089,
+     "label": "⭐ 8.9/10 · 2 089 отзывов",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "102М",
+     "scale": 10,
+     "feedback_key": "102М"
+    }
+   },
+   {
+    "offer_id": "232d0854c563ed4d013f3d1cf889ce72",
+    "transport": "railway",
+    "price": {
+     "amount": 15381.58,
+     "currency": "RUB"
+    },
+    "duration_min": 1688,
+    "carriers": [
+     "ТВЕРСК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000003&arr_st=2064130&tn=108%D0%A2&date=21.08.2026+17:20:00",
+    "departure_at": "2026-08-21T17:20:00+03:00",
+    "arrival_at": "2026-08-22T21:28:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Казанский вокзал (2000003)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T17:20:00+03:00",
+      "arrival_at": "2026-08-22T21:28:00+03:00",
+      "duration_min": 1688,
+      "segments": [
+       {
+        "from": "Москва — Казанский вокзал (2000003)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T17:20:00+03:00",
+        "arrival_at": "2026-08-22T21:28:00+03:00",
+        "duration_min": 1688,
+        "carrier": "ТВЕРСК",
+        "voyage_no": "108Т",
+        "from_geo_point_id": 2957765,
+        "to_geo_point_id": 2961597,
+        "vehicle_meta": {
+         "name": "Ночной экспресс"
+        },
+        "review_summary": {
+         "review_count": 3,
+         "label": "3 отзыва",
+         "source": "offers-api.feedback",
+         "scope": "train",
+         "subject": "108Т",
+         "feedback_key": "108Т"
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "e2d91bd3a575cf64f80756f2fdee1d62",
+      "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+      "price": {
+       "amount": 15381.58,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 461.44,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 62
+     },
+     {
+      "variant_id": "82bf33a8409eaf97bb65f38053e39cf3",
+      "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+      "price": {
+       "amount": 15381.58,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 461.44,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 11
+     },
+     {
+      "variant_id": "2db5bd022c6c5846e4762a21b0923ab0",
+      "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+      "price": {
+       "amount": 16332.58,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 489.97,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 24
+     },
+     {
+      "variant_id": "83e493a3ccb1a3c0ec083b525ff0b5ce",
+      "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+      "price": {
+       "amount": 18568.08,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 557.04,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 34
+     },
+     {
+      "variant_id": "af08d1740c8a4ae03369f89af3f71502",
+      "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+      "price": {
+       "amount": 18568.08,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 557.04,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Ф",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 6
+     },
+     {
+      "variant_id": "78cfe05dc9e437cb06f4975cf280cd24",
+      "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+      "price": {
+       "amount": 19519.38,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 585.58,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 16
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "108Т",
+     "departure_at": "2026-08-21T17:20:00+03:00",
+     "departure_geo_point_id": 2957765,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "232d0854c563ed4d013f3d1cf889ce72",
+     "segment_hash": "54a43f77ccdaa90875ce093296e4f602",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "bcad4ad9-90fc-562e-a0fb-5aa105751ea3",
+     "card_id": "68c3abdf1f92ee47ea1707533e06509e"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "108Т",
+     "departure_at": "2026-08-21T17:20:00+03:00",
+     "price": {
+      "amount": 15381.58,
+      "currency": "RUB"
+     },
+     "title": "Поезд 108Т",
+     "carriers": [
+      "ТВЕРСК"
+     ],
+     "duration_min": 1688,
+     "arrival_at": "2026-08-22T21:28:00+03:00",
+     "review_summary": {
+      "review_count": 3,
+      "label": "3 отзыва",
+      "source": "offers-api.feedback",
+      "scope": "train",
+      "subject": "108Т",
+      "feedback_key": "108Т"
+     }
+    },
+    "cashback": {
+     "amount": 461.44,
+     "currency": "RUB"
+    },
+    "review_summary": {
+     "review_count": 3,
+     "label": "3 отзыва",
+     "source": "offers-api.feedback",
+     "scope": "train",
+     "subject": "108Т",
+     "feedback_key": "108Т"
+    }
+   },
+   {
+    "offer_id": "5efe34f629909292b3d40e61a30070c0",
+    "transport": "railway",
+    "price": {
+     "amount": 17262.08,
+     "currency": "RUB"
+    },
+    "duration_min": 1857,
+    "carriers": [
+     "ФПК"
+    ],
+    "search_results_url": "https://www.tutu.ru/poezda/rasp_d.php?date=21.08.2026&nnst1=2000000&nnst2=2064130",
+    "segments_count": 1,
+    "checkout_url": "https://www.tutu.ru/poezda/order/?departure_st=2657260&arrival_st=2656918&dep_st=2000003&arr_st=2064130&tn=037%D0%93&date=21.08.2026+01:48:00",
+    "departure_at": "2026-08-21T01:48:00+03:00",
+    "arrival_at": "2026-08-22T08:45:00+03:00",
+    "legs": [
+     {
+      "label": "outbound",
+      "from": "Москва — Казанский вокзал (2000003)",
+      "to": "Сочи, 2064130",
+      "departure_at": "2026-08-21T01:48:00+03:00",
+      "arrival_at": "2026-08-22T08:45:00+03:00",
+      "duration_min": 1857,
+      "segments": [
+       {
+        "from": "Москва — Казанский вокзал (2000003)",
+        "to": "Сочи, 2064130",
+        "departure_at": "2026-08-21T01:48:00+03:00",
+        "arrival_at": "2026-08-22T08:45:00+03:00",
+        "duration_min": 1857,
+        "carrier": "ФПК",
+        "voyage_no": "038*Г",
+        "from_geo_point_id": 2957765,
+        "to_geo_point_id": 2961597,
+        "vehicle_meta": {
+         "is_premium": true
+        }
+       }
+      ]
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "8f3783f1f6a30d1c4691c1e159169554",
+      "offer_hash": "5efe34f629909292b3d40e61a30070c0",
+      "price": {
+       "amount": 17262.08,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 517.86,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Т",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 3
+     },
+     {
+      "variant_id": "50ee6a1884bb7bb475da1a6f10f6d90e",
+      "offer_hash": "5efe34f629909292b3d40e61a30070c0",
+      "price": {
+       "amount": 17262.08,
+       "currency": "RUB"
+      },
+      "cashback": {
+       "amount": 517.86,
+       "currency": "RUB"
+      },
+      "conditions": {
+       "refundable": true,
+       "changeable": false
+      },
+      "service_class": "2Э",
+      "seat_category": "COMPARTMENT",
+      "seats_left": 1
+     }
+    ],
+    "checkout_ref": {
+     "transport": "railway",
+     "departure_city_id": 2657260,
+     "arrival_city_id": 2656918,
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "037Г",
+     "departure_at": "2026-08-21T01:48:00+03:00",
+     "departure_geo_point_id": 2957765,
+     "arrival_geo_point_id": 2961597,
+     "offer_hash": "5efe34f629909292b3d40e61a30070c0",
+     "segment_hash": "f304c612b0b1686ad684188ad447a66b",
+     "search_id": "5D608C89-A7C4-47B3-BAEB-284FA8CFC724",
+     "result_id": "dd7d7552-d481-565c-aef8-2dd5ca09d0da",
+     "card_id": "0194cfd74c8b20a84f68622fbfa924cf"
+    },
+    "details_ref": {
+     "transport": "railway",
+     "source": "seats-gateway.seats-by-params",
+     "departure_station_code": "2000003",
+     "arrival_station_code": "2064130",
+     "train_number": "037Г",
+     "departure_at": "2026-08-21T01:48:00+03:00",
+     "price": {
+      "amount": 17262.08,
+      "currency": "RUB"
+     },
+     "title": "Поезд 038*Г",
+     "carriers": [
+      "ФПК"
+     ],
+     "duration_min": 1857,
+     "arrival_at": "2026-08-22T08:45:00+03:00"
+    },
+    "cashback": {
+     "amount": 517.86,
+     "currency": "RUB"
+    }
+   }
+  ],
+  "meta": {
+   "transport": "railway",
+   "from": {
+    "name": "Москва",
+    "geo_id": "2657260",
+    "region": "Москва"
+   },
+   "to": {
+    "name": "Сочи",
+    "geo_id": "2656918",
+    "region": "Краснодарский край"
+   },
+   "sort": "price_asc",
+   "page": 1,
+   "page_size": 30,
+   "total_returned": 10,
+   "total_matched": 10,
+   "total_matched_exact": true,
+   "has_more": false,
+   "post_filter_dropped_over_cap": 0,
+   "post_filter_dropped_not_direct": 0,
+   "post_filter_dropped_wrong_carrier": 0,
+   "post_filter_dropped_wrong_seat_category": 2,
+   "post_filter_unverified_seat_category": 0,
+   "carriers_available": [
+    {
+     "name": "ФПК",
+     "offers_count": 10,
+     "price_from": 5735.68
+    },
+    {
+     "name": "ГРАНД",
+     "offers_count": 1,
+     "price_from": 7117.01
+    },
+    {
+     "name": "ТВЕРСК",
+     "offers_count": 1,
+     "price_from": 15381.58
+    }
+   ]
+  }
+ }
+}

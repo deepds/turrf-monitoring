@@ -1,0 +1,11 @@
+{
+ "parsed_offers": 86,
+ "normalized_offers": 86,
+ "dropped_without_price": 0,
+ "included_offers": 10,
+ "excluded_offers": 76,
+ "exclusion_reasons": {
+  "WRONG_CAR_TYPE": 24,
+  "FARE_COLLAPSED_NOT_CHEAPEST": 52
+ }
+}
