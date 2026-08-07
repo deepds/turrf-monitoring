@@ -66,9 +66,20 @@ docker compose exec api python -m tmo.cli check-sources
 
 ### Запустить суточный цикл руками
 
+**Только отвязанным контейнером.** `docker compose exec` — это клиент,
+привязанный к вашей сессии: при обрыве ssh он умирает и уносит сбор с собой.
+Проверено на живом прогоне: 120 наблюдений остались в `RUNNING`, ни одной
+попытки не записалось.
+
 ```bash
-docker compose exec api python -m tmo.cli collect --snapshot-date today
+docker compose run -d --rm --name tmo-collect   api cli collect --snapshot-date today
+
+docker logs -f tmo-collect          # следить
+docker stop tmo-collect             # остановить
 ```
+
+Через `exec` допустимы только короткие команды: `check-sources`, `coverage`,
+`golden`, `health`.
 
 ### Досбор дыр
 

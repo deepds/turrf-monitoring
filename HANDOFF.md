@@ -136,8 +136,9 @@ links 446 436 · trip_rows 53 400 · raw 16 550
 ssh node67
 cd ~/turrf_monitoring
 sudo docker compose exec api python -m tmo.cli check-sources
-sudo docker compose exec api python -m tmo.cli collect --snapshot-date today --horizon 5   # проба
-sudo docker compose exec api python -m tmo.cli collect --snapshot-date today               # полный
+# Сбор — только отвязанным контейнером: exec умирает вместе с ssh-сессией
+sudo docker compose run -d --rm --name tmo-collect api cli collect --snapshot-date today --horizon 5
+sudo docker logs -f tmo-collect
 ```
 
 Полный прогон — около 5,5 часов по оценке capacity-анализа.
@@ -194,7 +195,10 @@ TMO_TEST_DATABASE_URL=postgresql+psycopg://tmo:tmo_dev_pwd@192.168.10.67:55432/t
    `TMO_PIP_INDEX_URL`, в образ не зашивается.
 6. **Синтетический снимок не выбирается витриной.** Для показа живых данных
    нужен живой снимок, иначе висит красный баннер.
-7. **Пороги — в профиле, не в коде.** Соблазн «поправить константу» здесь
+7. **Долгий сбор запускается `docker compose run -d`, не `exec`.** `exec` —
+   клиент, привязанный к ssh-сессии: обрыв связи убивает прогон, наблюдения
+   зависают в `RUNNING`, попытки не записываются.
+8. **Пороги — в профиле, не в коде.** Соблазн «поправить константу» здесь
    означает незаметное переписывание истории.
 
 ---

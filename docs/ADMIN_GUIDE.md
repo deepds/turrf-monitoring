@@ -98,8 +98,8 @@ docker compose exec api python -m tmo.cli golden
 # 3. Демонстрационный снимок без сети — проверка конвейера целиком
 docker compose exec api python -m tmo.cli demo-snapshot --horizon 5
 
-# 4. Боевой сбор
-docker compose exec api python -m tmo.cli collect --snapshot-date today
+# 4. Боевой сбор — отвязанным контейнером, иначе обрыв ssh унесёт прогон
+docker compose run -d --rm --name tmo-collect api cli collect --snapshot-date today
 ```
 
 Демонстрационный снимок помечается `is_synthetic` и **никогда** не становится
