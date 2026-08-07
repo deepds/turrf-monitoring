@@ -1,0 +1,12 @@
+{
+ "parsed_offers": 107,
+ "normalized_offers": 107,
+ "dropped_without_price": 0,
+ "included_offers": 30,
+ "excluded_offers": 77,
+ "exclusion_reasons": {
+  "FARE_COLLAPSED_NOT_CHEAPEST": 31,
+  "REFUNDABLE_FARE": 44,
+  "WRONG_CABIN": 2
+ }
+}

@@ -1,0 +1,65 @@
+{
+ "case": "rail_no_direct_service",
+ "family": "RAIL",
+ "source": "tutu_mcp",
+ "source_code": "tutu_mcp",
+ "note": "Самара-Казань: прямого сообщения нет, выдача пуста при ненулевом carriers_available",
+ "recorded_at": "2026-08-07",
+ "query": {
+  "origin_code": "KUF",
+  "origin_name": "Самара",
+  "origin_rzd_code": "2024000",
+  "destination_code": "KZN",
+  "destination_name": "Казань",
+  "destination_rzd_code": "2060615",
+  "service_date": "2026-08-21",
+  "passengers": 1
+ },
+ "payload": {
+  "offers": [],
+  "meta": {
+   "transport": "railway",
+   "from": {
+    "name": "Самара",
+    "geo_id": "2656914",
+    "region": "Самарская область, городской округ Самара",
+    "also_named": [
+     {
+      "geo_id": "3989803",
+      "name": "Самара",
+      "region": "Тверская область, Осташковский муниципальный округ"
+     },
+     {
+      "geo_id": "3893806",
+      "name": "Самара",
+      "region": "Рязанская область, Михайловский район"
+     }
+    ]
+   },
+   "to": {
+    "name": "Казань",
+    "geo_id": "2656873",
+    "region": "Республика Татарстан, городской округ Казань"
+   },
+   "sort": "price_asc",
+   "page": 1,
+   "page_size": 30,
+   "total_returned": 0,
+   "total_matched": 0,
+   "total_matched_exact": true,
+   "has_more": false,
+   "post_filter_dropped_over_cap": 0,
+   "post_filter_dropped_not_direct": 0,
+   "post_filter_dropped_wrong_carrier": 0,
+   "post_filter_dropped_wrong_seat_category": 0,
+   "post_filter_unverified_seat_category": 0,
+   "carriers_available": [
+    {
+     "name": "ФПК",
+     "offers_count": 15,
+     "price_from": 3157.25
+    }
+   ]
+  }
+ }
+}

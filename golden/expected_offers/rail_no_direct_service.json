@@ -1,0 +1,8 @@
+{
+ "parsed_offers": 0,
+ "normalized_offers": 0,
+ "dropped_without_price": 0,
+ "included_offers": 0,
+ "excluded_offers": 0,
+ "exclusion_reasons": {}
+}

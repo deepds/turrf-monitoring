@@ -1,0 +1,10 @@
+{
+ "parsed_offers": 85,
+ "normalized_offers": 85,
+ "dropped_without_price": 0,
+ "included_offers": 10,
+ "excluded_offers": 75,
+ "exclusion_reasons": {
+  "FARE_COLLAPSED_NOT_CHEAPEST": 75
+ }
+}
