@@ -38,9 +38,9 @@ docker compose up -d --build
 
 | Что | Адрес |
 |---|---|
-| Дашборд | http://localhost:8080 |
-| API + OpenAPI | http://localhost:8081/docs |
-| Health | http://localhost:8081/api/v1/health |
+| Дашборд | http://localhost:8090 |
+| API + OpenAPI | http://localhost:8091/docs |
+| Health | http://localhost:8091/api/v1/health |
 
 Демонстрационный снимок без обращения к источникам:
 
@@ -58,6 +58,17 @@ docker compose exec api python -m tmo.cli collect --snapshot-date today
 
 ---
 
+## Экраны
+
+| Экран | Что показывает |
+|---|---|
+| Куда ехать | Направления с расчётной стоимостью поездки на выбранные даты |
+| Транспорт | ЖД по датам отправления; авиа по датам вылета при заданной длительности |
+| Сетка авиа | Все пары дат одного маршрута: дата вылета × длительность |
+| Проживание | Одна ночь по всем пяти городам |
+| Детализация цены | Включённые и исключённые предложения, провенанс, экспорт |
+| Покрытие и качество | Что собралось, что нет, что отвечали источники |
+
 ## Слои
 
 ```text
@@ -72,17 +83,28 @@ source-specific деталей, фронтенд не содержит расч�
 
 ## Карта документации
 
+**Начинать отсюда:** [HANDOFF.md](HANDOFF.md) — состояние работ и точка входа.
+
 | Документ | О чём |
 |---|---|
+| [HANDOFF.md](HANDOFF.md) | **Точка входа.** Состояние, что делать дальше, ловушки |
+| [DECISIONS.md](docs/DECISIONS.md) | **Перед изменениями.** Что защищает от каких неверных цифр |
+| [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Открытые дефекты с воспроизведением |
 | [PHASE0_AUDIT.md](docs/PHASE0_AUDIT.md) | Аудит первой версии, классификация компонентов |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Целевая архитектура v2 |
+| [ARCHITECTURE_GAP_ANALYSIS.md](docs/ARCHITECTURE_GAP_ANALYSIS.md) | Разрывы v1 → v2 |
+| [DATA_MODEL_GAP_ANALYSIS.md](docs/DATA_MODEL_GAP_ANALYSIS.md) | Модель данных, индексы, объёмы |
 | [DATA_CONTRACT.md](docs/DATA_CONTRACT.md) | Сущности, поля, инварианты |
 | [CALCULATION_METHODOLOGY.md](docs/CALCULATION_METHODOLOGY.md) | Как из предложений получается цифра |
 | [COLLECTION_CAPACITY_ANALYSIS.md](docs/COLLECTION_CAPACITY_ANALYSIS.md) | Укладывается ли суточный цикл в SLA |
-| [COLLECTION_RELIABILITY.md](COLLECTION_RELIABILITY.md) | Что ломается по ночам |
-| [SOURCES_PLAYBOOK.md](SOURCES_PLAYBOOK.md) | Поведение Туту и РЖД |
-| [DATA_PIPELINE_PLAYBOOK.md](DATA_PIPELINE_PLAYBOOK.md) | Где число начинает врать |
-| [RUNBOOK.md](docs/RUNBOOK.md) | Эксплуатация |
+| [TEST_GAP_ANALYSIS.md](docs/TEST_GAP_ANALYSIS.md) | Что проверяется и что нет |
+| [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Фазы, решения, риски |
+| [RUNBOOK.md](docs/RUNBOOK.md) | Эксплуатация и диагностика |
+| [ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) | Развёртывание и настройка |
 | [USER_GUIDE.md](docs/USER_GUIDE.md) | Как читать дашборд |
+| [ACCEPTANCE.md](docs/ACCEPTANCE.md) | Критерии Go / No-Go |
 | [LIMITATIONS.md](docs/LIMITATIONS.md) | Чего система не утверждает |
-| [HANDOFF.md](HANDOFF.md) | Состояние работ, точка входа для продолжения |
+| [CELERY_TASK_MAP.md](docs/CELERY_TASK_MAP.md) | Задачи, очереди, расписание |
+| [SOURCES_PLAYBOOK.md](SOURCES_PLAYBOOK.md) | Поведение Туту и РЖД; в конце — дополнение v2 |
+| [DATA_PIPELINE_PLAYBOOK.md](DATA_PIPELINE_PLAYBOOK.md) | Где число начинает врать |
+| [COLLECTION_RELIABILITY.md](COLLECTION_RELIABILITY.md) | Что ломается по ночам |

@@ -293,7 +293,7 @@ docker exec -i tco-postgres-1 psql -U tco -d tco -c "SELECT pid, state, now()-qu
 
 ## Чего этот документ не заменяет
 
-- [RUNBOOK.md](RUNBOOK.md) — команды эксплуатации, развёртывание, резервные
+- [RUNBOOK.md](docs/RUNBOOK.md) — команды эксплуатации, развёртывание, резервные
   копии, разбор конкретных инцидентов.
 - [SOURCES_PLAYBOOK.md](SOURCES_PLAYBOOK.md) — поведение источников и стоимость
   обращений.
