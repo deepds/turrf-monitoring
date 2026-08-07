@@ -56,9 +56,23 @@ export function App() {
     >
       <Layout style={{ minHeight: '100vh' }}>
         <Layout.Header style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-          <Typography.Text strong style={{ color: '#fff', fontSize: 16, whiteSpace: 'nowrap' }}>
-            Стоимость поездок
-          </Typography.Text>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              lineHeight: 1.2,
+            }}
+          >
+            <Typography.Text
+              style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, whiteSpace: 'nowrap' }}
+            >
+              Туризм.рф
+            </Typography.Text>
+            <Typography.Text strong style={{ color: '#fff', fontSize: 16, whiteSpace: 'nowrap' }}>
+              Стоимость поездок
+            </Typography.Text>
+          </div>
           <Menu
             theme="dark"
             mode="horizontal"
