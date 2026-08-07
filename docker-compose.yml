@@ -1,0 +1,158 @@
+# Стек второй версии.
+#
+# Порты выбраны так, чтобы стек мог работать рядом с первой версией на том же
+# узле: её исторические raw-ответы и Offers — evidence, а не мусор.
+#
+# Два воркера, а не один: воркер, обслуживающий все очереди сразу, не выполняет
+# собственного лечения — забитый сбором пул не запускает ни сторожа, ни досбор.
+
+name: tmo
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: travel-monitoring-observatory:2.0.0
+  restart: unless-stopped
+  environment: &app-env
+    TMO_DATABASE_URL: postgresql+psycopg://tmo:${TMO_DB_PASSWORD:-tmo_dev_pwd}@postgres:5432/tmo
+    TMO_REDIS_URL: redis://redis:6379/0
+    TMO_ENVIRONMENT: ${TMO_ENVIRONMENT:-production}
+    TMO_LOG_LEVEL: ${TMO_LOG_LEVEL:-INFO}
+    TMO_LOG_FORMAT: json
+    TMO_ADMIN_TOKEN: ${TMO_ADMIN_TOKEN:-}
+    TMO_CORS_ORIGINS: ${TMO_CORS_ORIGINS:-http://localhost:8090}
+    TMO_TUTU_CONCURRENCY: ${TMO_TUTU_CONCURRENCY:-8}
+    TMO_RZD_CONCURRENCY: ${TMO_RZD_CONCURRENCY:-4}
+  volumes:
+    - raw_storage:/var/tmo/raw
+    - export_storage:/var/tmo/export
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tmo
+      POSTGRES_PASSWORD: ${TMO_DB_PASSWORD:-tmo_dev_pwd}
+      POSTGRES_DB: tmo
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    command:
+      - postgres
+      # Предохранитель от повисшей транзакции: она держит блокировки и не
+      # завершается сама, если клиента больше нет.
+      - -c
+      - idle_in_transaction_session_timeout=600000
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=512MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${TMO_PG_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tmo -d tmo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${TMO_REDIS_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *app
+    command: ["api"]
+    ports:
+      - "${TMO_API_PORT:-8091}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    environment:
+      <<: *app-env
+      TMO_WORKER_CONCURRENCY: ${TMO_WORKER_CONCURRENCY:-8}
+    labels:
+      # Проверка живости спрашивает не «отвечаешь ли ты», а разбирается ли
+      # очередь: пинг проходит и при намертво занятом пуле.
+      autoheal: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "python -m tmo.tasks.health"]
+      interval: 300s
+      timeout: 60s
+      retries: 2
+      start_period: 120s
+
+  worker-service:
+    <<: *app
+    command: ["worker-service"]
+    labels:
+      autoheal: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "python -m tmo.tasks.health"]
+      interval: 300s
+      timeout: 60s
+      retries: 2
+      start_period: 120s
+
+  beat:
+    <<: *app
+    command: ["beat"]
+
+  ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: travel-monitoring-observatory-ui:2.0.0
+    restart: unless-stopped
+    ports:
+      - "${TMO_UI_PORT:-8090}:8080"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 60
+      AUTOHEAL_START_PERIOD: 300
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  pgdata:
+  redisdata:
+  raw_storage:
+  export_storage:

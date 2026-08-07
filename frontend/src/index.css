@@ -1,0 +1,25 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  background: #f5f6f8;
+}
+
+/* Исключённое предложение должно быть видно глазом, а не вычитываться из
+   колонки с причиной. */
+.row-excluded > td {
+  background: #fff7f6 !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.recharts-wrapper {
+  cursor: default;
+}
