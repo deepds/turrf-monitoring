@@ -11,9 +11,10 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = PACKAGE_ROOT.parent
@@ -82,7 +83,12 @@ class Settings(BaseSettings):
 
     # --- API -------------------------------------------------------------
     api_prefix: str = "/api/v1"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # NoDecode обязателен: без него pydantic-settings пытается разобрать
+    # значение переменной окружения как JSON **до** валидаторов, и обычный
+    # список через запятую роняет запуск приложения целиком.
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
     #: Токен административных операций. Пустой = админ-эндпоинты выключены.
     admin_token: str = ""
     export_row_limit: int = 50_000
@@ -90,9 +96,24 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+        """Принимает и список через запятую, и JSON-массив.
+
+        Оба формата встречаются в реальных развёртываниях: первый пишут руками
+        в ``.env``, второй генерируют оркестраторы.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            import json
+
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        return [item.strip() for item in text.split(",") if item.strip()]
 
     @field_validator("raw_storage_path", "export_storage_path", mode="after")
     @classmethod

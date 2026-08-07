@@ -12,6 +12,11 @@ x-app: &app
   build:
     context: .
     dockerfile: Dockerfile
+    args:
+      # Адрес индекса пакетов — свойство сети развёртывания, а не приложения.
+      # На узлах, где `pypi.org` закрыт, задаётся зеркало через .env.
+      PIP_INDEX_URL: ${TMO_PIP_INDEX_URL:-https://pypi.org/simple}
+      PIP_TRUSTED_HOST: ${TMO_PIP_TRUSTED_HOST:-}
   image: travel-monitoring-observatory:2.0.0
   restart: unless-stopped
   environment: &app-env
