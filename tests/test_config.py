@@ -41,7 +41,7 @@ def test_admin_operations_are_off_by_default(monkeypatch: pytest.MonkeyPatch) ->
     assert Settings().admin_token == ""
 
 
-def test_storage_paths_are_created(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:  # noqa: ANN001
+def test_storage_paths_are_created(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("TMO_RAW_STORAGE_PATH", str(tmp_path / "raw"))
     monkeypatch.setenv("TMO_EXPORT_STORAGE_PATH", str(tmp_path / "export"))
     settings = Settings()
