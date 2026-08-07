@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     rzd_concurrency: int = 4
     #: Обращений в минуту на источник. Лимиты источниками не документированы;
     #: значения получены замером и держат запас.
-    tutu_rate_limit_per_minute: int = 60
+    tutu_rate_limit_per_minute: int = 180
     rzd_rate_limit_per_minute: int = 90
     #: Транспортные таймауты, секунды.
     connect_timeout_seconds: float = 10.0

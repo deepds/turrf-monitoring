@@ -114,7 +114,22 @@ links 446 436 · trip_rows 53 400 · raw 16 550
 
 ### Чего нет
 
-Живого снимка с обоими источниками. Причина — ISSUE-1, см. ниже.
+Живого снимка с обоими источниками.
+
+**Ночь 07→08.08.2026 запущена как замер.** Рабочая точка Туту — 3 одновременных
+/ 180 в минуту, развёрнута 18:00 MSK. Планировщик отработает сам: 00:30 план,
+01:00 ЖД, 02:00 авиа, 05:00 проживание, 08:00 досбор, 09:00 расчёт, 09:30
+публикация.
+
+Утром снять: были ли `503`, сколько собралось, во сколько закончилось,
+уложилось ли в 10:00.
+
+```bash
+ssh node67 && cd ~/turrf_monitoring
+sudo docker compose logs worker --since 12h 2>&1 | grep -iE "размыкатель|пропущена|503"
+sudo docker compose exec -T postgres psql -U tmo -d tmo -c   "SELECT id, attempt_no, status, round(coverage_total::numeric,3) cov, published_at    FROM market_snapshots ORDER BY id;"
+sudo docker compose exec -T postgres psql -U tmo -d tmo -c   "SELECT source_code, outcome, count(*), sum(offers_parsed)    FROM source_attempts WHERE snapshot_id=(SELECT max(id) FROM market_snapshots)    GROUP BY 1,2 ORDER BY 3 DESC;"
+```
 
 ---
 
