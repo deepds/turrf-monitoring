@@ -207,6 +207,171 @@ def rail_chart(
     }
 
 
+def air_chart(
+    session: Session,
+    context: SnapshotContext,
+    *,
+    origin: str,
+    nights: int,
+    destination: str | None = None,
+) -> dict[str, Any]:
+    """Ряды стоимости авиа по датам вылета при фиксированной длительности.
+
+    Авиа наблюдается парой дат, а не одной: на каждую дату вылета приходится
+    29 разных цен по длительности поездки. Линия по дате вылета существует
+    только как **срез** этой сетки — поэтому длительность задаётся явно, а не
+    выбирается за пользователя.
+
+    Каждая точка остаётся настоящим круговым тарифом на конкретную пару дат.
+    Ни одна не является суммой двух односторонних: такой величины на рынке
+    нет.
+    """
+    query = _metric_query(context, MetricType.AIR_ROUND_TRIP).where(
+        models.CalculatedMetric.origin_code == origin,
+        models.CalculatedMetric.nights == nights,
+    )
+    if destination:
+        query = query.where(models.CalculatedMetric.destination_code == destination)
+    metrics = session.scalars(
+        query.order_by(
+            models.CalculatedMetric.destination_code, models.CalculatedMetric.service_date
+        )
+    ).all()
+
+    registry = city_registry()
+    series: dict[str, dict[str, Any]] = {}
+    for metric in metrics:
+        entry = series.setdefault(
+            metric.destination_code,
+            {
+                "destination": {
+                    "code": metric.destination_code,
+                    "name": registry.get(metric.destination_code).name,
+                },
+                "points": [],
+            },
+        )
+        point = _point(metric)
+        # Обратная дата — часть наблюдения, а не производная: без неё точка
+        # неотличима от односторонней.
+        point["return_date"] = metric.return_date.isoformat() if metric.return_date else None
+        entry["points"].append(point)
+
+    return {
+        "origin": {"code": origin, "name": registry.get(origin).name},
+        "parameters": {
+            "transport": "AIR",
+            "cabin": "ECONOMY",
+            "direct_only": True,
+            "refundable": False,
+            "passengers": 1,
+            "trip_type": "ROUND_TRIP",
+            "nights": nights,
+        },
+        "available_nights": available_air_nights(session, context),
+        "series": list(series.values()),
+    }
+
+
+def air_grid(
+    session: Session,
+    context: SnapshotContext,
+    *,
+    origin: str,
+    destination: str,
+) -> dict[str, Any]:
+    """Полная сетка наблюдений авиа по одному маршруту.
+
+    Авиа наблюдается парой дат, и линия по дате вылета — лишь срез. Сетка
+    показывает всё, что наблюдалось: 30 дат вылета × длительность поездки.
+
+    Шкала цвета считается **здесь**, а не на фронтенде, и строится по одному
+    маршруту: цена Москва → Сочи и Москва → Петербург несравнимы, и общая
+    шкала покрасила бы один маршрут сплошь «дорогим».
+
+    Пустая клетка и клетка без рынка — разные вещи, и в шкалу не входит ни
+    одна: серый цвет «дёшево» был бы прямым враньём.
+    """
+    metrics = session.scalars(
+        _metric_query(context, MetricType.AIR_ROUND_TRIP)
+        .where(
+            models.CalculatedMetric.origin_code == origin,
+            models.CalculatedMetric.destination_code == destination,
+        )
+        .order_by(models.CalculatedMetric.service_date, models.CalculatedMetric.nights)
+    ).all()
+
+    cells: list[dict[str, Any]] = []
+    priced: list[float] = []
+    for metric in metrics:
+        value = _num(metric.median_price)
+        if value is not None:
+            priced.append(value)
+        cells.append(
+            {
+                "metric_id": metric.id,
+                "departure_date": metric.service_date.isoformat() if metric.service_date else None,
+                "return_date": metric.return_date.isoformat() if metric.return_date else None,
+                "nights": metric.nights,
+                "day_offset": metric.day_offset,
+                "median": value,
+                "min": _num(metric.min_price),
+                "offers_count": metric.offers_count,
+                "sources_count": metric.sources_count,
+                "confidence_level": str(metric.confidence_level),
+                "is_partial": metric.is_partial,
+                "is_no_market": metric.is_no_market,
+                "no_market_reason": metric.no_market_reason,
+                "warning_codes": list(metric.warning_codes or []),
+            }
+        )
+
+    registry = city_registry()
+    return {
+        "origin": {"code": origin, "name": registry.get(origin).name},
+        "destination": {"code": destination, "name": registry.get(destination).name},
+        "parameters": {
+            "transport": "AIR",
+            "cabin": "ECONOMY",
+            "direct_only": True,
+            "refundable": False,
+            "passengers": 1,
+            "trip_type": "ROUND_TRIP",
+        },
+        "departure_dates": sorted(
+            {cell["departure_date"] for cell in cells if cell["departure_date"]}
+        ),
+        "nights_options": sorted({cell["nights"] for cell in cells if cell["nights"]}),
+        # Шкала строится только по клеткам с ценой. Клетки без рынка и
+        # несобранные в неё не входят.
+        "scale": {
+            "min": round(min(priced), 2) if priced else None,
+            "max": round(max(priced), 2) if priced else None,
+            "priced_cells": len(priced),
+            "no_market_cells": sum(1 for cell in cells if cell["is_no_market"]),
+            "total_cells": len(cells),
+        },
+        "cells": cells,
+    }
+
+
+def available_air_nights(session: Session, context: SnapshotContext) -> list[int]:
+    """Длительности поездок, наблюдавшиеся в этом расчёте."""
+    return sorted(
+        value
+        for value in session.scalars(
+            select(models.CalculatedMetric.nights)
+            .where(
+                models.CalculatedMetric.calculation_run_id == context.run.id,
+                models.CalculatedMetric.metric_type == MetricType.AIR_ROUND_TRIP.value,
+                models.CalculatedMetric.nights.is_not(None),
+            )
+            .distinct()
+        )
+        if value is not None
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Блок C — график проживания
 # --------------------------------------------------------------------------- #

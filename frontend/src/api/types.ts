@@ -102,6 +102,54 @@ export interface RailChartResponse {
   series: RailSeries[];
 }
 
+export interface AirSeries {
+  destination: CityRef;
+  points: (ChartPoint & { return_date: string | null })[];
+}
+
+export interface AirChartResponse {
+  context: SnapshotContext;
+  mode: 'OVERVIEW' | 'ROUTE_DETAIL';
+  origin: CityRef;
+  parameters: Record<string, unknown>;
+  available_nights: number[];
+  series: AirSeries[];
+}
+
+export interface AirGridCell {
+  metric_id: number;
+  departure_date: string | null;
+  return_date: string | null;
+  nights: number | null;
+  day_offset: number | null;
+  median: number | null;
+  min: number | null;
+  offers_count: number;
+  sources_count: number;
+  confidence_level: Confidence;
+  is_partial: boolean;
+  is_no_market: boolean;
+  no_market_reason: string | null;
+  warning_codes: string[];
+}
+
+export interface AirGridResponse {
+  context: SnapshotContext;
+  origin: CityRef;
+  destination: CityRef;
+  parameters: Record<string, unknown>;
+  departure_dates: string[];
+  nights_options: number[];
+  scale: {
+    min: number | null;
+    max: number | null;
+    priced_cells: number;
+    no_market_cells: number;
+    total_cells: number;
+  };
+  cells: AirGridCell[];
+}
+
 export interface HotelSeries {
   city: CityRef;
   points: ChartPoint[];

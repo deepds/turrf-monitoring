@@ -87,7 +87,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
         batch_size=args.batch_size,
         soft_budget_seconds=args.soft_budget,
     )
-    _print(report.__dict__)
+    _print(report)
     return 0 if report.status != "FAILED" else 2
 
 
@@ -107,7 +107,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
         batch_size=args.batch_size,
         soft_budget_seconds=args.soft_budget,
     )
-    _print(report.__dict__)
+    _print(report)
     return 0
 
 

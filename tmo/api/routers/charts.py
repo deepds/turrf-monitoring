@@ -14,7 +14,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from tmo.api.deps import db_session, snapshot_context
-from tmo.services.showcase import SnapshotContext, hotel_chart, rail_chart
+from tmo.services.showcase import (
+    SnapshotContext,
+    air_chart,
+    air_grid,
+    hotel_chart,
+    rail_chart,
+)
 
 router = APIRouter(prefix="/charts", tags=["Графики"])
 
@@ -34,6 +40,49 @@ def rail(
         "mode": "ROUTE_DETAIL" if destination else "OVERVIEW",
         **data,
     }
+
+
+@router.get("/air", summary="Стоимость кругового авиатарифа по датам вылета")
+def air(
+    origin: str = Query(..., description="Код города отправления"),
+    nights: int = Query(
+        7,
+        ge=1,
+        le=29,
+        description=(
+            "Длительность поездки в ночах. Задаётся явно: авиа наблюдается парой "
+            "дат, и на каждую дату вылета приходится своя цена для каждой "
+            "длительности."
+        ),
+    ),
+    destination: str | None = Query(
+        None, description="Код города назначения; без него — все направления"
+    ),
+    context: SnapshotContext = Depends(snapshot_context),
+    session: Session = Depends(db_session),
+) -> dict[str, Any]:
+    data = air_chart(session, context, origin=origin, nights=nights, destination=destination)
+    return {
+        "context": context.as_dict(),
+        "mode": "ROUTE_DETAIL" if destination else "OVERVIEW",
+        **data,
+    }
+
+
+@router.get("/air-grid", summary="Полная сетка наблюдений авиа по одному маршруту")
+def air_grid_route(
+    origin: str = Query(..., description="Код города отправления"),
+    destination: str = Query(..., description="Код города назначения"),
+    context: SnapshotContext = Depends(snapshot_context),
+    session: Session = Depends(db_session),
+) -> dict[str, Any]:
+    """Сетка «дата вылета × длительность поездки» для одного маршрута.
+
+    Один маршрут, а не все сразу: цены разных направлений несравнимы, и общая
+    шкала цвета покрасила бы дальнее направление сплошь «дорогим».
+    """
+    data = air_grid(session, context, origin=origin, destination=destination)
+    return {"context": context.as_dict(), **data}
 
 
 @router.get("/hotels", summary="Стоимость одной ночи по всем городам")

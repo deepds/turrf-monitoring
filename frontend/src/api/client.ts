@@ -6,6 +6,8 @@
  */
 
 import type {
+  AirChartResponse,
+  AirGridResponse,
   CoverageResponse,
   Dictionary,
   HotelChartResponse,
@@ -70,6 +72,16 @@ export const api = {
 
   railChart: (params: { origin: string; destination?: string; snapshot_date?: string }) =>
     request<RailChartResponse>('/charts/rail', params),
+
+  airChart: (params: {
+    origin: string;
+    nights: number;
+    destination?: string;
+    snapshot_date?: string;
+  }) => request<AirChartResponse>('/charts/air', params),
+
+  airGrid: (params: { origin: string; destination: string; snapshot_date?: string }) =>
+    request<AirGridResponse>('/charts/air-grid', params),
 
   hotelChart: (params: { stars: number; snapshot_date?: string }) =>
     request<HotelChartResponse>('/charts/hotels', params),

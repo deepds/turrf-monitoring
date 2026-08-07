@@ -1,9 +1,17 @@
 /**
- * Блок B — «Транспорт / ЖД».
+ * Блок B — «Транспорт».
  *
- * Два режима: обзор по всем направлениям из города и детализация одного
- * маршрута. Авиа здесь не показывается: круговой тариф не раскладывается на
- * даты отправления, и рядом с плечом ЖД он означал бы другую величину.
+ * Два вида транспорта на одной оси дат, но величины у них разные, и это
+ * приходится удерживать явно:
+ *
+ * * **ЖД** наблюдается плечом на дату отправления — 30 точек на маршрут,
+ *   ось однозначна;
+ * * **авиа** наблюдается парой дат, и на каждую дату вылета приходится своя
+ *   цена для каждой длительности поездки. Линия существует только как срез
+ *   этой сетки, поэтому длительность выбирает пользователь, а не программа.
+ *
+ * Ни одна точка не является суммой двух односторонних тарифов: такой величины
+ * на рынке нет. Всю сетку целиком показывает отдельная страница «Сетка авиа».
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -11,24 +19,36 @@ import { Alert, Card, Col, Row, Segmented, Select, Space, Spin, Table, Typograph
 import type { ColumnsType } from 'antd/es/table';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import type { ChartPoint, Dictionary, RailChartResponse, SnapshotListItem } from '../api/types';
+import type {
+  AirChartResponse,
+  ChartPoint,
+  Dictionary,
+  RailChartResponse,
+  SnapshotListItem,
+} from '../api/types';
 import { PriceChart, type ChartSeries } from '../components/PriceChart';
 import { SnapshotBanner } from '../components/SnapshotBanner';
 import { ConfidenceTag, Hint, NoMarketBadge, SampleTag, WarningTags } from '../components/Indicators';
-import { dateLabel, money } from '../format';
+import { dateLabel, money, nightsLabel } from '../format';
+
+type Mode = 'RAIL' | 'AIR';
 
 interface Props {
   snapshots: SnapshotListItem[];
   dictionary?: Dictionary;
 }
 
-export function RailPage({ snapshots, dictionary }: Props) {
+const DEFAULT_NIGHTS = 7;
+
+export function TransportPage({ snapshots, dictionary }: Props) {
+  const [mode, setMode] = useState<Mode>('RAIL');
   const [origins, setOrigins] = useState<{ code: string; name: string }[]>([]);
   const [origin, setOrigin] = useState('MOW');
   const [destination, setDestination] = useState<string | undefined>(undefined);
   const [snapshotDate, setSnapshotDate] = useState<string | undefined>(undefined);
   const [metric, setMetric] = useState<'median' | 'min'>('median');
-  const [data, setData] = useState<RailChartResponse | null>(null);
+  const [nights, setNights] = useState(DEFAULT_NIGHTS);
+  const [data, setData] = useState<RailChartResponse | AirChartResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,12 +59,20 @@ export function RailPage({ snapshots, dictionary }: Props) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    api
-      .railChart({ origin, destination, snapshot_date: snapshotDate })
-      .then(setData)
+    const request =
+      mode === 'RAIL'
+        ? api.railChart({ origin, destination, snapshot_date: snapshotDate })
+        : api.airChart({ origin, destination, nights, snapshot_date: snapshotDate });
+    request
+      .then((value) => setData(value))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [origin, destination, snapshotDate]);
+  }, [mode, origin, destination, snapshotDate, nights]);
+
+  const availableNights = useMemo<number[]>(
+    () => (data && 'available_nights' in data ? data.available_nights : []),
+    [data],
+  );
 
   const series = useMemo<ChartSeries[]>(
     () =>
@@ -63,10 +91,19 @@ export function RailPage({ snapshots, dictionary }: Props) {
 
   const columns: ColumnsType<ChartPoint> = [
     {
-      title: 'Дата отправления',
+      title: mode === 'RAIL' ? 'Дата отправления' : 'Дата вылета',
       dataIndex: 'date',
       render: (value: string, row) => <Link to={`/metrics/${row.metric_id}`}>{dateLabel(value)}</Link>,
     },
+    ...(mode === 'AIR'
+      ? [
+          {
+            title: 'Дата возврата',
+            dataIndex: 'return_date',
+            render: (value: string | null) => dateLabel(value),
+          } as ColumnsType<ChartPoint>[number],
+        ]
+      : []),
     {
       title: 'Медиана',
       dataIndex: 'median',
@@ -101,7 +138,20 @@ export function RailPage({ snapshots, dictionary }: Props) {
 
       <Card size="small">
         <Row gutter={[16, 16]} align="bottom">
-          <Col xs={24} md={5}>
+          <Col xs={24} md={4}>
+            <Typography.Text type="secondary">Транспорт</Typography.Text>
+            <br />
+            <Segmented
+              block
+              value={mode}
+              onChange={(value) => setMode(value as Mode)}
+              options={[
+                { label: 'ЖД', value: 'RAIL' },
+                { label: 'Авиа', value: 'AIR' },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={4}>
             <Typography.Text type="secondary">Город отправления</Typography.Text>
             <Select
               value={origin}
@@ -113,27 +163,40 @@ export function RailPage({ snapshots, dictionary }: Props) {
               options={origins.map((city) => ({ value: city.code, label: city.name }))}
             />
           </Col>
-          <Col xs={24} md={7}>
-            <Typography.Text type="secondary">Режим</Typography.Text>
+          <Col xs={24} md={6}>
+            <Typography.Text type="secondary">Направление</Typography.Text>
             <br />
             <Segmented
               block
               value={destination ?? 'ALL'}
               onChange={(value) => setDestination(value === 'ALL' ? undefined : String(value))}
               options={[
-                { label: 'Все направления', value: 'ALL' },
+                { label: 'Все', value: 'ALL' },
                 ...destinations.map((city) => ({ label: city.name, value: city.code })),
               ]}
             />
           </Col>
-          <Col xs={12} md={5}>
+          {mode === 'AIR' && (
+            <Col xs={12} md={4}>
+              <Typography.Text type="secondary">Длительность поездки</Typography.Text>
+              <Select
+                value={nights}
+                onChange={setNights}
+                style={{ width: '100%' }}
+                options={(availableNights.length ? availableNights : [DEFAULT_NIGHTS]).map(
+                  (value) => ({ value, label: nightsLabel(value) }),
+                )}
+              />
+            </Col>
+          )}
+          <Col xs={12} md={3}>
             <Typography.Text type="secondary">Дата наблюдения</Typography.Text>
             <Select
               value={snapshotDate ?? 'LATEST'}
               onChange={(value) => setSnapshotDate(value === 'LATEST' ? undefined : value)}
               style={{ width: '100%' }}
               options={[
-                { value: 'LATEST', label: 'Последний снимок' },
+                { value: 'LATEST', label: 'Последний' },
                 ...snapshots.map((item) => ({
                   value: item.snapshot_date,
                   label: `${dateLabel(item.snapshot_date)}${item.is_synthetic ? ' (демо)' : ''}`,
@@ -141,7 +204,7 @@ export function RailPage({ snapshots, dictionary }: Props) {
               ]}
             />
           </Col>
-          <Col xs={12} md={4}>
+          <Col xs={12} md={3}>
             <Typography.Text type="secondary">Показатель</Typography.Text>
             <br />
             <Segmented
@@ -157,8 +220,18 @@ export function RailPage({ snapshots, dictionary }: Props) {
         </Row>
         <div style={{ marginTop: 12 }}>
           <Hint>
-            Только ЖД, только купе, прямой поезд, один пассажир, одно плечо. 30 дат отправления.
-            Клик по точке открывает детализацию цены.
+            {mode === 'RAIL' ? (
+              <>
+                Только ЖД, только купе, прямой поезд, один пассажир, одно плечо. 30 дат
+                отправления. Клик по точке открывает детализацию цены.
+              </>
+            ) : (
+              <>
+                Настоящий круговой тариф, эконом, прямой, невозвратный, один пассажир. Длительность
+                поездки задана явно: у авиа на каждую дату вылета приходится своя цена для каждой
+                длительности. Всю сетку сразу показывает страница «Сетка авиа».
+              </>
+            )}
           </Hint>
         </div>
       </Card>
@@ -166,7 +239,14 @@ export function RailPage({ snapshots, dictionary }: Props) {
       {error && <Alert type="error" showIcon message={error} />}
 
       <Spin spinning={loading}>
-        <Card size="small" title={`Стоимость плеча из города ${data?.origin?.name ?? ''}`}>
+        <Card
+          size="small"
+          title={
+            mode === 'RAIL'
+              ? `Стоимость плеча из города ${data?.origin?.name ?? ''}`
+              : `Круговой тариф из города ${data?.origin?.name ?? ''}, ${nightsLabel(nights)}`
+          }
+        >
           <PriceChart series={series} valueKey={metric} />
         </Card>
 

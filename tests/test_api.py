@@ -282,3 +282,78 @@ def test_showcase_never_touches_the_network(client: TestClient, monkeypatch) -> 
         ).status_code
         == 200
     )
+
+
+# --------------------------------------------------------------------------- #
+# Авиа: линия при фиксированной длительности и полная сетка
+# --------------------------------------------------------------------------- #
+
+
+def test_air_chart_requires_explicit_trip_length(client: TestClient) -> None:
+    """Длительность задаётся явно: на каждую дату вылета своя цена для каждой.
+
+    Выбирать её за пользователя означало бы показать один срез сетки как «цену
+    авиа», не сказав, какой именно.
+    """
+    body = client.get("/api/v1/charts/air", params={"origin": "MOW", "nights": 1}).json()
+    assert body["parameters"]["nights"] == 1
+    assert body["parameters"]["trip_type"] == "ROUND_TRIP"
+    assert body["available_nights"]
+    assert body["series"]
+    point = body["series"][0]["points"][0]
+    # Обратная дата — часть наблюдения: без неё точка неотличима от плеча.
+    assert point["return_date"]
+    assert point["metric_id"]
+
+
+def test_air_chart_route_detail(client: TestClient) -> None:
+    body = client.get(
+        "/api/v1/charts/air", params={"origin": "MOW", "destination": "AER", "nights": 1}
+    ).json()
+    assert body["mode"] == "ROUTE_DETAIL"
+    assert len(body["series"]) == 1
+
+
+def test_air_chart_rejects_impossible_trip_length(client: TestClient) -> None:
+    assert client.get("/api/v1/charts/air", params={"origin": "MOW", "nights": 0}).status_code == 422
+    assert client.get("/api/v1/charts/air", params={"origin": "MOW", "nights": 99}).status_code == 422
+
+
+def test_air_grid_returns_all_observed_date_pairs(client: TestClient) -> None:
+    body = client.get(
+        "/api/v1/charts/air-grid", params={"origin": "MOW", "destination": "AER"}
+    ).json()
+    assert body["origin"]["code"] == "MOW"
+    assert body["destination"]["code"] == "AER"
+    assert body["cells"]
+    assert body["departure_dates"]
+    assert body["nights_options"]
+    # Каждая клетка — наблюдение с собственной метрикой, а не производная.
+    assert all(cell["metric_id"] for cell in body["cells"])
+    assert all(cell["return_date"] for cell in body["cells"])
+
+
+def test_air_grid_scale_excludes_cells_without_price(client: TestClient) -> None:
+    """Клетка без рынка не входит в шкалу: серый цвет читался бы как «дёшево»."""
+    body = client.get(
+        "/api/v1/charts/air-grid", params={"origin": "MOW", "destination": "AER"}
+    ).json()
+    scale = body["scale"]
+    priced = [cell["median"] for cell in body["cells"] if cell["median"] is not None]
+    assert scale["priced_cells"] == len(priced)
+    assert scale["total_cells"] == len(body["cells"])
+    if priced:
+        assert scale["min"] == pytest.approx(min(priced), abs=0.01)
+        assert scale["max"] == pytest.approx(max(priced), abs=0.01)
+
+
+def test_air_grid_scale_is_per_route(client: TestClient) -> None:
+    """Шкала строится по одному маршруту: цены разных направлений несравнимы."""
+    first = client.get(
+        "/api/v1/charts/air-grid", params={"origin": "MOW", "destination": "AER"}
+    ).json()["scale"]
+    second = client.get(
+        "/api/v1/charts/air-grid", params={"origin": "MOW", "destination": "LED"}
+    ).json()["scale"]
+    assert first["min"] is not None and second["min"] is not None
+    assert (first["min"], first["max"]) != (second["min"], second["max"])

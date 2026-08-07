@@ -8,11 +8,13 @@ import {
   DashboardOutlined,
   HomeOutlined,
   SafetyCertificateOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import { api } from './api/client';
 import type { Dictionary, SnapshotListItem } from './api/types';
 import { TripsPage } from './pages/TripsPage';
-import { RailPage } from './pages/RailPage';
+import { TransportPage } from './pages/TransportPage';
+import { AirGridPage } from './pages/AirGridPage';
 import { HotelsPage } from './pages/HotelsPage';
 import { MetricPage } from './pages/MetricPage';
 import { CoveragePage } from './pages/CoveragePage';
@@ -20,6 +22,7 @@ import { CoveragePage } from './pages/CoveragePage';
 const NAV = [
   { key: '/trips', icon: <CompassOutlined />, label: 'Куда ехать' },
   { key: '/rail', icon: <BarChartOutlined />, label: 'Транспорт' },
+  { key: '/air-grid', icon: <TableOutlined />, label: 'Сетка авиа' },
   { key: '/hotels', icon: <HomeOutlined />, label: 'Проживание' },
   { key: '/coverage', icon: <SafetyCertificateOutlined />, label: 'Покрытие и качество' },
 ];
@@ -90,12 +93,13 @@ export function App() {
               <Route path="/trips" element={<TripsPage dictionary={dictionary} />} />
               <Route
                 path="/rail"
-                element={<RailPage snapshots={snapshots} dictionary={dictionary} />}
+                element={<TransportPage snapshots={snapshots} dictionary={dictionary} />}
               />
               <Route
                 path="/hotels"
                 element={<HotelsPage snapshots={snapshots} dictionary={dictionary} />}
               />
+              <Route path="/air-grid" element={<AirGridPage snapshots={snapshots} />} />
               <Route path="/metrics/:metricId" element={<MetricPage dictionary={dictionary} />} />
               <Route path="/coverage" element={<CoveragePage snapshots={snapshots} />} />
               <Route path="*" element={<Navigate to="/trips" replace />} />
