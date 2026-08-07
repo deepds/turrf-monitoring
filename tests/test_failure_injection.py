@@ -141,10 +141,13 @@ def test_success_resets_the_failure_counter() -> None:
 
 
 def test_budget_reports_exhaustion_without_killing_collected_data() -> None:
-    budget = TimeBudget(total_seconds=0.05)
-    time.sleep(0.06)
+    # Бюджет задаётся отсчётом от прошлого, а не ожиданием: разрешение
+    # таймера на Windows около 16 мс, и тест на пятидесяти миллисекундах
+    # мигает.
+    budget = TimeBudget(total_seconds=1.0, started_at=time.monotonic() - 5.0)
     assert budget.exhausted is True
     assert budget.remaining == 0.0
+    assert budget.can_afford(0.1) is False
 
 
 def test_child_budget_never_exceeds_parent() -> None:
@@ -258,3 +261,98 @@ def test_partial_pagination_is_marked_not_discarded() -> None:
     assert TutuConnector._outcome([object()], True) is AttemptOutcome.PARTIAL
     assert TutuConnector._outcome([object()], False) is AttemptOutcome.SUCCESS
     assert TutuConnector._outcome([], False) is AttemptOutcome.NO_MARKET
+
+
+# --------------------------------------------------------------------------- #
+# Размыкатель: первопричина и прожигание пачки (ISSUE-1)
+# --------------------------------------------------------------------------- #
+
+
+def test_circuit_remembers_what_started_the_series() -> None:
+    """Первопричина обязана пережить открытие цепи.
+
+    Без неё в базе остаются только CIRCUIT_OPEN, и расследовать нечего:
+    система знает, что перестала спрашивать, и не знает почему.
+    """
+    breaker = CircuitBreaker(failure_threshold=3, reset_seconds=60)
+    breaker.record_failure(ConnectorTransportError("tutu_mcp ответил 503"))
+    breaker.record_failure(ConnectorTimeout("таймаут"))
+    breaker.record_failure(ConnectorTimeout("таймаут"))
+
+    assert breaker.is_open is True
+    assert breaker.first_cause is not None
+    assert "503" in breaker.first_cause
+
+
+def test_circuit_open_error_carries_the_first_cause() -> None:
+    breaker = CircuitBreaker(failure_threshold=2, reset_seconds=60)
+    breaker.record_failure(ConnectorTransportError("tutu_mcp ответил 503"))
+    breaker.record_failure(ConnectorTimeout("таймаут"))
+
+    with pytest.raises(CircuitOpenError) as info:
+        breaker.check("tutu_mcp")
+    assert "503" in str(info.value)
+
+
+def test_success_forgets_the_cause() -> None:
+    breaker = CircuitBreaker(failure_threshold=5, reset_seconds=60)
+    breaker.record_failure(ConnectorTransportError("разовый сбой"))
+    breaker.record_success()
+    assert breaker.first_cause is None
+
+
+def test_transport_reports_the_cause_to_the_circuit() -> None:
+    """Причина доезжает от транспорта до размыкателя, а не теряется."""
+    transport = build_transport(
+        lambda request: httpx.Response(503), max_retries=0, threshold=2
+    )
+    for _ in range(2):
+        with pytest.raises(ConnectorTransportError):
+            transport.get("https://example.test/data")
+    assert transport.circuit.first_cause is not None
+    assert "503" in transport.circuit.first_cause
+
+
+def test_open_circuit_skips_the_batch_instead_of_burning_it() -> None:
+    """Пачка не прожигается при разомкнутой цепи.
+
+    Цепь остывает 900 секунд, а пачка исполняется минуты. Прожигание давало
+    сотни записей CIRCUIT_OPEN и занимало досбор той же пустотой; наблюдения
+    при этом выглядели обработанными.
+    """
+    from datetime import date as date_type
+
+    from tmo.connectors.transport import TRANSPORT_POOL
+    from tmo.core.config import get_settings
+    from tmo.core.enums import CollectionFamily
+    from tmo.execution.runner import WorkItem, execute_batch
+
+    TRANSPORT_POOL.reset()
+    settings = get_settings()
+    circuit = TRANSPORT_POOL.circuit(
+        "tutu_mcp", settings.circuit_failure_threshold, settings.circuit_reset_seconds
+    )
+    for _ in range(settings.circuit_failure_threshold):
+        circuit.record_failure(ConnectorTransportError("tutu_mcp ответил 503"))
+    assert circuit.is_open is True
+
+    items = [
+        WorkItem(
+            job_id=index,
+            snapshot_id=1,
+            snapshot_date=date_type(2026, 8, 7),
+            job_key=f"RAIL:{index}",
+            family=CollectionFamily.RAIL,
+            source_code="tutu_mcp",
+            query=QUERY,
+            idempotency=f"key-{index}",
+            execution_scope="PRIMARY",
+        )
+        for index in range(20)
+    ]
+
+    records, untouched = execute_batch(items, budget=TimeBudget(total_seconds=30))
+
+    assert records == [], "при разомкнутой цепи обращений быть не должно"
+    assert sorted(untouched) == list(range(20)), "все наблюдения обязаны вернуться в план"
+    TRANSPORT_POOL.reset()

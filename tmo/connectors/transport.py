@@ -83,6 +83,7 @@ class CircuitBreaker:
         self.reset_seconds = reset_seconds
         self._failures = 0
         self._opened_at: float | None = None
+        self._first_cause: str | None = None
         self._lock = threading.Lock()
 
     @property
@@ -93,6 +94,7 @@ class CircuitBreaker:
             if time.monotonic() - self._opened_at >= self.reset_seconds:
                 self._opened_at = None
                 self._failures = 0
+                self._first_cause = None
                 return False
             return True
 
@@ -100,22 +102,42 @@ class CircuitBreaker:
         with self._lock:
             self._failures = 0
             self._opened_at = None
+            self._first_cause = None
 
-    def record_failure(self) -> None:
+    def record_failure(self, cause: Exception | None = None) -> None:
+        """Считает отказ и, при переполнении, размыкает цепь.
+
+        Первый отказ серии запоминается и попадает в лог вместе с открытием
+        цепи. Без этого расследовать нечего: система знает, что перестала
+        спрашивать, и не знает почему — все последующие записи содержат лишь
+        ``CIRCUIT_OPEN``.
+        """
         with self._lock:
+            if self._failures == 0 and cause is not None:
+                self._first_cause = f"{type(cause).__name__}: {cause}"[:400]
             self._failures += 1
             if self._failures >= self.failure_threshold and self._opened_at is None:
                 self._opened_at = time.monotonic()
-                logger.warning(
+                logger.error(
                     "Размыкатель цепи разомкнут",
                     failures=self._failures,
                     reset_seconds=self.reset_seconds,
+                    first_cause=self._first_cause,
+                    last_cause=f"{type(cause).__name__}: {cause}"[:400] if cause else None,
                 )
+
+    @property
+    def first_cause(self) -> str | None:
+        """Чем начиналась серия отказов, открывшая цепь."""
+        return self._first_cause
 
     def check(self, source_code: str) -> None:
         if self.is_open:
+            # Причина, с которой началась серия, едет с каждым отказом: иначе
+            # в базе останутся только CIRCUIT_OPEN без объяснения.
+            suffix = f" (началось с: {self._first_cause})" if self._first_cause else ""
             raise CircuitOpenError(
-                f"Размыкатель цепи источника {source_code} разомкнут",
+                f"Размыкатель цепи источника {source_code} разомкнут{suffix}",
                 source_code=source_code,
             )
 
@@ -267,7 +289,7 @@ class SourceTransport:
                 break
             time.sleep(delay)
 
-        self.circuit.record_failure()
+        self.circuit.record_failure(last_error)
         raise last_error or ConnectorTransportError(
             f"Не удалось обратиться к {self.source_code}", source_code=self.source_code
         )

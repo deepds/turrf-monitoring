@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -176,17 +177,32 @@ class TutuConnector(BaseConnector):
     def __init__(self, source: Source, settings: Settings | None = None) -> None:
         super().__init__(source, settings)
         self._mcp: McpClient | None = None
+        self._mcp_lock = threading.Lock()
 
     # -- инфраструктура ------------------------------------------------------
 
     def mcp(self, budget: TimeBudget) -> McpClient:
-        if self._mcp is None:
-            client = McpClient(
-                self.transport(), self.source.endpoint, client_name="travel-monitoring-observatory"
-            )
-            client.initialize(budget=budget)
-            client.tool_schemas(budget=budget)
-            self._mcp = client
+        """Клиент MCP, общий на процесс. Инициализация — под блокировкой.
+
+        Без блокировки восемь потоков пачки одновременно видят ``None`` и
+        делают по два сетевых вызова каждый: залп из шестнадцати запросов в
+        первую же секунду сбора. Именно такой залп открывал размыкатель цепи
+        на восьми отказах подряд и уносил всю пачку.
+        """
+        if self._mcp is not None:
+            return self._mcp
+        with self._mcp_lock:
+            # Проверка повторяется внутри блокировки: пока поток ждал, клиента
+            # мог создать кто-то другой.
+            if self._mcp is None:
+                client = McpClient(
+                    self.transport(),
+                    self.source.endpoint,
+                    client_name="travel-monitoring-observatory",
+                )
+                client.initialize(budget=budget)
+                client.tool_schemas(budget=budget)
+                self._mcp = client
         return self._mcp
 
     def close(self) -> None:

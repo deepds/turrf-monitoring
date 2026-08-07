@@ -32,12 +32,13 @@ from typing import Any
 
 from sqlalchemy import insert
 from sqlalchemy import select as sa_select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 from tmo.catalog.registry import City, Source, city_registry, source_registry
 from tmo.connectors.contracts import AirQuery, ConnectorResult, HotelQuery, Query, RailQuery
 from tmo.connectors.registry import get_connector
-from tmo.connectors.transport import TimeBudget
+from tmo.connectors.transport import TRANSPORT_POOL, TimeBudget
 from tmo.core.config import Settings, get_settings
 from tmo.core.enums import AttemptOutcome, CollectionFamily, JobStatus, NoMarketReason
 from tmo.core.ids import idempotency_key
@@ -196,18 +197,39 @@ def execute_batch(
     budget: TimeBudget,
     settings: Settings | None = None,
     replay_mode: str | None = None,
-) -> list[AttemptRecord]:
-    """Транзакции нет. Здесь и только здесь выполняются обращения к источникам."""
+) -> tuple[list[AttemptRecord], list[int]]:
+    """Транзакции нет. Здесь и только здесь выполняются обращения к источникам.
+
+    Возвращает записи попыток и идентификаторы наблюдений, до которых сбор
+    **не дошёл**: при разомкнутой цепи остаток пачки не прожигается впустую.
+    """
     settings = settings or get_settings()
     by_source: dict[str, list[WorkItem]] = {}
     for item in items:
         by_source.setdefault(item.source_code, []).append(item)
 
     records: list[AttemptRecord] = []
+    untouched: list[int] = []
     for source_code, source_items in by_source.items():
         source = source_registry().get(source_code)
         connector = get_connector(source_code, replay_mode=replay_mode)
         workers = max(1, min(source.concurrency, len(source_items)))
+
+        # Цепь уже разомкнута — спрашивать бессмысленно и вредно: она остывает
+        # 900 секунд, а пачка исполняется минуты. Прожигание остатка дало бы
+        # сотни записей CIRCUIT_OPEN и заняло бы досбор той же пустотой.
+        circuit = TRANSPORT_POOL.circuit(
+            source_code, settings.circuit_failure_threshold, settings.circuit_reset_seconds
+        )
+        if circuit.is_open:
+            logger.warning(
+                "Пачка пропущена: цепь источника разомкнута",
+                source=source_code,
+                skipped=len(source_items),
+                first_cause=circuit.first_cause,
+            )
+            untouched.extend(item.job_id for item in source_items)
+            continue
 
         # Коннектор связывается умолчанием: замыкание над переменной цикла
         # однажды подставит чужой источник в чужую пачку.
@@ -241,7 +263,7 @@ def execute_batch(
         else:
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=source_code) as pool:
                 records.extend(pool.map(_run, source_items))
-    return records
+    return records, untouched
 
 
 # --------------------------------------------------------------------------- #
@@ -514,6 +536,9 @@ class BatchReport:
     raw_responses: int
     budget_exhausted: bool
     elapsed_seconds: float
+    #: Наблюдения, до которых сбор не дошёл: цепь источника была разомкнута.
+    #: Они возвращены в план и попадут в досбор, когда цепь остынет.
+    skipped_untouched: int = 0
     outcomes: dict[str, int] = field(default_factory=dict)
 
 
@@ -548,10 +573,21 @@ def run_batch(
                 job.first_dispatched_at = now_utc()
             job.status = JobStatus.RUNNING
 
-    records = execute_batch(items, budget=budget, settings=settings, replay_mode=replay_mode)
+    records, untouched = execute_batch(
+        items, budget=budget, settings=settings, replay_mode=replay_mode
+    )
 
     with session_scope() as session:
         stats = persist_batch(session, records)
+        if untouched:
+            # Наблюдение, до которого сбор не дошёл, обязано вернуться в план,
+            # а не остаться «выполняющимся»: иначе оно выглядит обработанным и
+            # не попадает ни в дыры, ни в досбор.
+            session.execute(
+                sa_update(models.CollectionJob)
+                .where(models.CollectionJob.id.in_(untouched))
+                .values(status=JobStatus.PLANNED.value)
+            )
 
     outcomes: dict[str, int] = {}
     for record in records:
@@ -559,6 +595,7 @@ def run_batch(
         outcomes[key] = outcomes.get(key, 0) + 1
 
     return BatchReport(
+        skipped_untouched=len(untouched),
         planned_items=len(items),
         attempts=stats["attempts"],
         offers=stats["offers"],
