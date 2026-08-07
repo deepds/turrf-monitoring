@@ -24,7 +24,24 @@ from tmo.core.logging import configure_logging
 settings = get_settings()
 configure_logging(settings.log_level, settings.log_format)
 
-celery_app = Celery("tmo", broker=settings.redis_url, backend=settings.redis_url)
+#: Модули с задачами перечисляются явно. Воркер запускается как
+#: `celery -A tmo.tasks.celery_app:celery_app` и импортирует только этот
+#: модуль: без `include` он знает расписание и не знает ни одной задачи, а
+#: `beat` при этом исправно шлёт запуски. Отказ выглядит как
+#: `KeyError: 'tmo.open_snapshot'` в логе воркера и как молчащая ночь на
+#: витрине. Импорт отложен до старта воркера, поэтому цикла не возникает:
+#: модули задач сами импортируют `celery_app`.
+TASK_MODULES = [
+    "tmo.tasks.collection",
+    "tmo.tasks.maintenance",
+]
+
+celery_app = Celery(
+    "tmo",
+    broker=settings.redis_url,
+    backend=settings.redis_url,
+    include=TASK_MODULES,
+)
 
 celery_app.conf.update(
     timezone="Europe/Moscow",
