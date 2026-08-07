@@ -64,9 +64,7 @@ export function App() {
               lineHeight: 1.2,
             }}
           >
-            <Typography.Text
-              style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, whiteSpace: 'nowrap' }}
-            >
+            <Typography.Text strong style={{ color: '#fff', fontSize: 16, whiteSpace: 'nowrap' }}>
               Туризм.рф
             </Typography.Text>
             <Typography.Text strong style={{ color: '#fff', fontSize: 16, whiteSpace: 'nowrap' }}>
