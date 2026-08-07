@@ -1,0 +1,81 @@
+# Справочник пяти городов MVP.
+#
+# `rzd_express_code` — узловой код города РЖД: он означает ВСЕ вокзалы города,
+# в отличие от кодов отдельных станций. Проверено на живом /api/v1/suggests
+# 07.08.2026.
+#
+# `avia_metro_code` — метрополийный код города для авиа. Для многоаэропортовых
+# городов передаётся именно он, а не первый IATA из списка: запрос в SVO вместо
+# MOW отсекал 76 % рынка (SOURCES_PLAYBOOK §7).
+#
+# Идентификаторы Туту намеренно НЕ прописаны: коннектор разрешает город по
+# названию, а geo_id гостиничного индекса и транспортного — разные сущности,
+# и подстановка транспортного в поиск отелей даёт пустую выдачу.
+
+cities:
+  - code: MOW
+    name: Москва
+    name_en: Moscow
+    timezone: Europe/Moscow
+    rzd_express_code: "2000000"
+    avia_metro_code: MOW
+    avia_airport_codes: [SVO, DME, VKO, ZIA]
+    multi_airport: true
+    sort_order: 10
+
+  - code: LED
+    name: Санкт-Петербург
+    name_en: Saint Petersburg
+    timezone: Europe/Moscow
+    rzd_express_code: "2004000"
+    avia_metro_code: LED
+    avia_airport_codes: [LED]
+    multi_airport: false
+    sort_order: 20
+
+  - code: AER
+    name: Сочи
+    name_en: Sochi
+    timezone: Europe/Moscow
+    rzd_express_code: "2064130"
+    avia_metro_code: AER
+    avia_airport_codes: [AER]
+    multi_airport: false
+    sort_order: 30
+
+  - code: KUF
+    name: Самара
+    name_en: Samara
+    timezone: Europe/Samara
+    rzd_express_code: "2024000"
+    avia_metro_code: KUF
+    avia_airport_codes: [KUF]
+    multi_airport: false
+    sort_order: 40
+
+  - code: KZN
+    name: Казань
+    name_en: Kazan
+    timezone: Europe/Moscow
+    rzd_express_code: "2060615"
+    avia_metro_code: KZN
+    avia_airport_codes: [KZN]
+    multi_airport: false
+    sort_order: 50
+
+# Известные особенности направлений. Это НЕ фильтр планирования: наблюдение
+# всё равно выполняется, иначе система никогда не заметит появление рейса.
+# Пометка нужна витрине, чтобы отличить ожидаемое отсутствие рынка от дефекта.
+known_market_gaps:
+  - origin: KUF
+    destination: KZN
+    family: RAIL
+    expectation: NO_DIRECT_SERVICE
+    note: >
+      Прямого пассажирского сообщения Самара — Казань нет: РЖД и Туту отдают
+      только варианты с пересадкой. Проверено 07.08.2026.
+  - origin: KZN
+    destination: KUF
+    family: RAIL
+    expectation: NO_DIRECT_SERVICE
+    note: Обратное плечо того же направления.

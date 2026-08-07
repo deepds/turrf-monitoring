@@ -1,0 +1,72 @@
+# Реестр источников MVP. Новые источники в текущую итерацию не подключаются.
+#
+# `rate_limit_per_minute` и `concurrency` — наши значения, не опубликованные
+# источником. Оба публичных сервиса лимиты не документируют; цифры получены
+# замером и держат запас (SOURCES_PLAYBOOK, «Стоимость обращений»).
+
+sources:
+  - code: tutu_mcp
+    name: Туту.ру
+    protocol: MCP
+    endpoint: https://mcp.tutu.ru/mcp
+    allowed_hosts: [mcp.tutu.ru]
+    families: [RAIL, AIR, HOTEL]
+    requires_credentials: false
+    price_semantics:
+      RAIL: Цена агента за одно место в одну сторону, соответствует корзине.
+      AIR: Круговой тариф за всех пассажиров запроса.
+      HOTEL: Итог за весь период проживания и заданный состав гостей.
+    # Замер 07.08.2026: при concurrency=12 и 240 запросах в минуту сервис
+    # начинает отвечать 503, размыкатель открывается через восемь отказов
+    # подряд и уносит остаток пачки. На 6 одновременных обращениях и 120 в
+    # минуту отказов не наблюдалось.
+    rate_limit_per_minute: 120
+    concurrency: 6
+    #  Потолок выдачи: page 1..10 × page_size 1..30 = 300 объектов.
+    max_pages: 10
+    page_size: 30
+    is_enabled: true
+    notes: >
+      Публичный MCP без авторизации. Имена и границы аргументов читаются из
+      tools/list во время выполнения: схема менялась между версиями сервера, и
+      жёстко зашитое имя однажды перестаёт работать без всякой ошибки.
+
+  - code: rzd
+    name: РЖД
+    protocol: REST
+    endpoint: https://ticket.rzd.ru
+    allowed_hosts: [ticket.rzd.ru]
+    families: [RAIL]
+    requires_credentials: false
+    price_semantics:
+      RAIL: Тариф перевозчика за одно место в одну сторону, без агентского сбора.
+    rate_limit_per_minute: 90
+    concurrency: 4
+    max_pages: 1
+    page_size: 0
+    is_enabled: true
+    notes: >
+      Публичный путь prices/train-pricing устойчиво отвечает 500; используется
+      B2B-путь /apib2b/p/Railway/V1/Search/TrainPricing с service_provider=B2B_RZD.
+      Возможен двухфазный протокол с RID и опросом.
+
+  - code: replay
+    name: Воспроизведение записанных ответов
+    protocol: REPLAY
+    endpoint: ""
+    allowed_hosts: []
+    families: [RAIL, AIR, HOTEL]
+    requires_credentials: false
+    price_semantics:
+      RAIL: Как у записанного источника.
+      AIR: Как у записанного источника.
+      HOTEL: Как у записанного источника.
+    rate_limit_per_minute: 0
+    concurrency: 32
+    max_pages: 1
+    page_size: 0
+    is_enabled: false
+    notes: >
+      Не источник рынка. Отдаёт заранее записанные ответы для golden-тестов и
+      демонстрации без сети. Снимок, собранный им, помечается
+      is_synthetic=true и никогда не публикуется как наблюдение рынка.
