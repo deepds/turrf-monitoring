@@ -315,6 +315,28 @@ def test_progress_tells_collection_apart_from_failure(session) -> None:
     assert cycle.progress(session, DAY)["is_closed"] is True
 
 
+def test_untouched_observations_are_not_reported_as_holes(session) -> None:
+    """Пропуск — это «пробовали и не вышло», а не «очередь не дошла».
+
+    Оба состояния выглядят в статусе одинаково: наблюдение числится `PLANNED` и
+    когда к нему не подходили ни разу, и когда источник не ответил. Для
+    диспетчера разницы нет — собрать надо и то и другое. Для человека разница
+    вся: в начале суток несобранных ровно столько, сколько в плане, и показ
+    этого числа как пропусков объявляет аварией нормальное начало работы.
+    """
+    snapshot = _snapshot(session)
+    for _ in range(10):
+        _job(session, snapshot, "AIR")  # очередь не дошла
+    _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)  # не ответил
+    _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
+
+    state = cycle.progress(session, DAY)
+    assert state["planned"] == 12
+    assert state["answered_count"] == 1
+    assert state["remaining"] == 11, "осталось собрать всё, кроме отвеченного"
+    assert state["holes"] == 1, "пропуск ровно один — тот, к которому подходили"
+
+
 def test_progress_is_absent_before_the_day_opens(session) -> None:
     """Снимка за сегодня ещё нет — это состояние ночи до 00:30, а не ошибка."""
     assert cycle.progress(session, DAY) is None

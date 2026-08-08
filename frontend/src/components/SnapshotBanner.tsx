@@ -55,6 +55,12 @@ function TodayProgress({ today }: { today: CycleProgress }) {
               ),
             )}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              собрано: {today.answered_count} из {today.planned}
+            </Typography.Text>
+            <Typography.Text
+              type={today.holes > 0 ? 'warning' : 'secondary'}
+              style={{ fontSize: 12 }}
+            >
               пропусков: {today.holes}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -62,8 +68,10 @@ function TodayProgress({ today }: { today: CycleProgress }) {
             </Typography.Text>
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Доля наблюдений, получивших ответ. Отказ ответом не считается — он
-            переспрашивается, пока не даст результат.
+            Проценты — доля наблюдений, получивших ответ. Пропуски — те, к которым
+            сбор уже подходил и ответа не получил; они переспрашиваются, пока не
+            дадут результат. Наблюдения, до которых очередь ещё не дошла, в
+            пропуски не входят.
           </Typography.Text>
         </Space>
       }

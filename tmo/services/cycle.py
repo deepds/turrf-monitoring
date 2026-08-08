@@ -124,11 +124,31 @@ def _untouched_by_family(session: Session, snapshot_id: int) -> dict[str, int]:
     return {str(family): int(count) for family, count in rows}
 
 
-def _holes_count(session: Session, snapshot_id: int, *, max_attempts: int | None = None) -> int:
+def _holes_count(
+    session: Session,
+    snapshot_id: int,
+    *,
+    max_attempts: int | None = None,
+    attempted_only: bool = False,
+) -> int:
+    """Наблюдения, подлежащие сбору.
+
+    ``attempted_only`` отделяет два разных состояния, которые в статусе
+    выглядят одинаково. Наблюдение, к которому сбор не подходил ни разу, и
+    наблюдение, которое пробовали и не получилось, оба числятся ``PLANNED`` —
+    но первое означает «очередь ещё не дошла», а второе «источник не ответил».
+
+    Для решения диспетчера разницы нет: собрать надо и то и другое. Для
+    человека разница вся: в начале суток несобранных ровно столько, сколько в
+    плане, и показывать это число как пропуски значит объявлять аварией
+    нормальное начало работы.
+    """
     query = select(func.count(models.CollectionJob.id)).where(
         models.CollectionJob.snapshot_id == snapshot_id,
         models.CollectionJob.status.in_([status.value for status in JobStatus if status.is_hole]),
     )
+    if attempted_only:
+        query = query.where(models.CollectionJob.first_dispatched_at.is_not(None))
     if max_attempts is not None:
         query = query.where(models.CollectionJob.retry_count < max_attempts)
     return int(session.scalar(query) or 0)
@@ -317,6 +337,16 @@ def progress(
     step = next_step(session, snapshot_date, now=now)
     deadline = day_deadline(snapshot_date)
 
+    planned = int(
+        session.scalar(
+            select(func.count(models.CollectionJob.id)).where(
+                models.CollectionJob.snapshot_id == snapshot.id
+            )
+        )
+        or 0
+    )
+    remaining = _holes_count(session, snapshot.id)
+
     return {
         "snapshot_id": snapshot.id,
         "snapshot_date": snapshot_date.isoformat(),
@@ -327,7 +357,13 @@ def progress(
         "step_reason": step.reason,
         "step_family": step.family,
         "answered": {key: round(value, 4) for key, value in shares.items()},
-        "holes": _holes_count(session, snapshot.id),
+        "planned": planned,
+        #: Получили ответ. То же, что доля `answered`, но числом.
+        "answered_count": planned - remaining,
+        #: Осталось собрать — вместе с теми, до кого очередь не дошла.
+        "remaining": remaining,
+        #: Пробовали и не получилось. Только это и есть пропуски.
+        "holes": _holes_count(session, snapshot.id, attempted_only=True),
         "deadline": deadline.isoformat(),
         "minutes_left": max(0, int((deadline - now).total_seconds() // 60)),
     }
