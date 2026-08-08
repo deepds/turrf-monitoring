@@ -63,11 +63,20 @@ def _loaded_celery_app():
 
 
 def _snapshot_with_jobs(session, statuses: list[str]) -> int:
-    """Снимок с наблюдениями заданных статусов и одним завершением в прошлом."""
-    from tmo.core.timeutil import now_utc
+    """Снимок с наблюдениями заданных статусов и одним завершением в прошлом.
 
+    Дата берётся операционная, а не из константы модуля. Проверка живости ищет
+    снимок именно за текущие операционные сутки, и снимок с фиксированной датой
+    она перестаёт находить на следующий день: тест зеленел ровно до полуночи
+    08.08.2026, а потом объявлял здоровым воркер с десятью зависшими
+    наблюдениями. Отказ в эту сторону — самый дорогой из возможных: он молчит
+    именно тогда, когда должен кричать.
+    """
+    from tmo.core.timeutil import now_utc, snapshot_date_for
+
+    today = snapshot_date_for()
     snapshot = models.MarketSnapshot(
-        snapshot_date=SNAPSHOT,
+        snapshot_date=today,
         attempt_no=1,
         status="COLLECTING",
         is_synthetic=False,
@@ -86,8 +95,8 @@ def _snapshot_with_jobs(session, statuses: list[str]) -> int:
                 family="AIR",
                 origin_code="MOW",
                 destination_code="AER",
-                service_date=SNAPSHOT + timedelta(days=1),
-                return_date=SNAPSHOT + timedelta(days=2),
+                service_date=today + timedelta(days=1),
+                return_date=today + timedelta(days=2),
                 day_offset=1,
                 status=status,
                 completed_at=long_ago if JobStatus(status).is_collected else None,

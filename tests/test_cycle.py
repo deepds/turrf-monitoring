@@ -457,6 +457,34 @@ def test_growth_stops_at_the_ceiling() -> None:
     assert governor.current == 12
 
 
+def test_batch_never_asks_for_more_than_its_budget_allows() -> None:
+    """Пачка не может требовать больше времени, чем ей отведено.
+
+    Нижняя граница в 20 наблюдений делала ровно это на дорогом семействе: в ночь
+    09.08.2026 авианаблюдение стоило 72 секунды при одновременности 2, в бюджет
+    помещалось пять, а граница требовала двадцати — и две трети пачки уходили в
+    `BUDGET_EXHAUSTED` до всякого обращения к источнику.
+    """
+    from tmo.connectors.transport import TRANSPORT_POOL
+    from tmo.core.config import get_settings
+    from tmo.services.pipeline import batch_size_for_family, seconds_per_observation
+
+    budget = get_settings().batch_soft_budget_seconds
+    TRANSPORT_POOL.reset()
+    try:
+        for concurrency in (12, 6, 3, 2):
+            governor = TRANSPORT_POOL.governor("tutu_mcp", 12, floor=2)
+            governor._current = float(concurrency)
+            for family in ("AIR", "HOTEL", "RAIL"):
+                needed = batch_size_for_family(family) * seconds_per_observation(family)
+                assert needed <= budget, (
+                    f"{family} при одновременности {concurrency}: пачке нужно "
+                    f"{needed:.0f} с при бюджете {budget} с"
+                )
+    finally:
+        TRANSPORT_POOL.reset()
+
+
 def test_batch_size_follows_the_working_point() -> None:
     """Пачка обязана считаться по фактической одновременности, а не по потолку.
 
