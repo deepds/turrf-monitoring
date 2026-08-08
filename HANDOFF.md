@@ -72,6 +72,7 @@ tests/             17 наборов, 190 тестов
 | [CALCULATION_METHODOLOGY.md](docs/CALCULATION_METHODOLOGY.md) | Как из предложений получается цифра |
 | [DATA_CONTRACT.md](docs/DATA_CONTRACT.md) | Что означает колонка и на что нельзя опираться |
 | [COLLECTION_CAPACITY_ANALYSIS.md](docs/COLLECTION_CAPACITY_ANALYSIS.md) | Укладывается ли цикл в SLA и почему это не гарантия |
+| [LOAD_PROFILE.md](docs/LOAD_PROFILE.md) | Чем платим за ночь: запросы, секунды, байты по замеру |
 | [RUNBOOK.md](docs/RUNBOOK.md) | Эксплуатация, диагностика, инциденты |
 | [ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) | Развёртывание и настройка |
 | [USER_GUIDE.md](docs/USER_GUIDE.md) | Как читать дашборд |
