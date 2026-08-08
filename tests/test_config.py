@@ -49,13 +49,22 @@ def test_storage_paths_are_created(monkeypatch: pytest.MonkeyPatch, tmp_path) ->
     assert settings.export_storage_path.exists()
 
 
-def test_source_limits_are_conservative_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Замер 07.08.2026: при 12 одновременных обращениях Туту отвечает 503."""
-    for name in ("TMO_TUTU_CONCURRENCY", "TMO_RZD_CONCURRENCY"):
-        monkeypatch.delenv(name, raising=False)
-    settings = Settings()
-    assert settings.tutu_concurrency <= 8
-    assert settings.rzd_concurrency <= 6
+def test_source_limits_are_conservative_by_default() -> None:
+    """Пределы проверяются там, откуда их берёт сбор, — в реестре источников.
+
+    Прежняя версия проверяла поля настроек, которых не читал никто: сбор берёт
+    одновременность из `sources.yaml`, а `settings.tutu_concurrency` оставался
+    декорацией. Тест был зелёным и при рабочей точке, отличной от проверяемой.
+
+    Границы — из ночных замеров: 12-15 одновременных источник не держит,
+    шесть держал три часа подряд.
+    """
+    from tmo.catalog.registry import source_registry
+
+    limits = {source.code: source for source in source_registry().sources}
+    assert limits["tutu_mcp"].concurrency <= 8
+    assert limits["rzd"].concurrency <= 6
+    assert limits["tutu_mcp"].rate_limit_per_minute <= 240
 
 
 def test_soft_budget_is_below_hard_timeout(monkeypatch: pytest.MonkeyPatch) -> None:

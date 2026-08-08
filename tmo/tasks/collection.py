@@ -12,12 +12,12 @@ from dataclasses import asdict
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from tmo.core.config import get_settings
-from tmo.core.enums import SnapshotStatus
+from tmo.core.enums import JobStatus, SnapshotStatus
 from tmo.core.logging import get_logger, log_context
-from tmo.core.timeutil import now_utc, snapshot_date_for
+from tmo.core.timeutil import now_utc, operational_date_for
 from tmo.db import models
 from tmo.db.session import session_scope
 from tmo.services.calculation import calculate_snapshot as calculate_service
@@ -29,13 +29,16 @@ from tmo.tasks.celery_app import celery_app
 
 logger = get_logger(__name__)
 
+#: Статусы наблюдений, закрытых ответом о рынке. Повторный сбор их не касается.
+COLLECTED_JOB_STATUSES = [status.value for status in JobStatus if status.is_collected]
+
 
 def _settings():
     return get_settings()
 
 
 def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | None:
-    snapshot_date = snapshot_date or snapshot_date_for()
+    snapshot_date = snapshot_date or operational_date_for()
     return session.scalar(
         select(models.MarketSnapshot.id)
         .where(models.MarketSnapshot.snapshot_date == snapshot_date)
@@ -47,7 +50,7 @@ def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | No
 @celery_app.task(name="tmo.open_snapshot", bind=True, time_limit=900, soft_time_limit=600)
 def open_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
     """Создаёт снимок и план на операционные сутки."""
-    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else operational_date_for()
     with session_scope() as session:
         creation = create_snapshot(session, snapshot_date=target)
     logger.info("Снимок открыт", snapshot_id=creation.snapshot_id, planned=creation.planned)
@@ -60,30 +63,74 @@ def open_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
     }
 
 
-@celery_app.task(name="tmo.collect_family", bind=True, time_limit=6 * 3600, soft_time_limit=6 * 3600 - 300)
+#: Жёсткий предел сбора семейства. Десять часов, а не шесть: авиа при
+#: одновременности 6 требует 8,2 часа, и прежний лимит убил бы задачу на
+#: середине — с потерей того, что не успело записаться пачкой.
+COLLECT_FAMILY_TIME_LIMIT = 10 * 3600
+
+
+@celery_app.task(
+    name="tmo.collect_family",
+    bind=True,
+    time_limit=COLLECT_FAMILY_TIME_LIMIT,
+    soft_time_limit=COLLECT_FAMILY_TIME_LIMIT - 300,
+)
 def collect_family(self, family: str, snapshot_date: str | None = None) -> dict[str, Any]:
     """Собирает одно семейство наблюдений текущего снимка."""
-    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else operational_date_for()
     with session_scope() as session:
         snapshot_id = _current_snapshot_id(session, target)
         if snapshot_id is None:
             creation = create_snapshot(session, snapshot_date=target)
             snapshot_id = creation.snapshot_id
+        # Уже закрытые наблюдения повторному сбору не подлежат: обращения к
+        # источнику потрачены бы впустую, а их результат всё равно отсекается
+        # по ключу идемпотентности при записи. Дыры (FAILED) остаются в выборке
+        # намеренно — их и должен закрыть повтор.
         job_ids = list(
             session.scalars(
                 select(models.CollectionJob.id).where(
                     models.CollectionJob.snapshot_id == snapshot_id,
                     models.CollectionJob.family == family,
+                    models.CollectionJob.status.notin_(COLLECTED_JOB_STATUSES),
                 )
+            )
+        )
+        planned_total = session.scalar(
+            select(func.count(models.CollectionJob.id)).where(
+                models.CollectionJob.snapshot_id == snapshot_id,
+                models.CollectionJob.family == family,
             )
         )
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
         snapshot.status = SnapshotStatus.COLLECTING
 
     with log_context(snapshot_id=snapshot_id):
-        logger.info("Сбор семейства", family=family, jobs=len(job_ids))
-        totals = collect_jobs(job_ids, execution_scope="PRIMARY")
-    return {"snapshot_id": snapshot_id, "family": family, **totals}
+        logger.info(
+            "Сбор семейства",
+            family=family,
+            jobs=len(job_ids),
+            already_collected=planned_total - len(job_ids),
+        )
+        totals = collect_jobs(job_ids, execution_scope="PRIMARY", family=family)
+
+    # Ноль обращений при непустой выборке — это не успех. Так выглядит проход
+    # по разомкнутой цепи: все пачки пропущены, окно семейства израсходовано,
+    # задача рапортует успех. Разница обязана быть видимой и в логе, и в
+    # результате задачи.
+    collected_nothing = bool(job_ids) and not totals.get("attempts")
+    if collected_nothing:
+        logger.error(
+            "Сбор семейства не сделал ни одного обращения",
+            family=family,
+            jobs=len(job_ids),
+        )
+    return {
+        "snapshot_id": snapshot_id,
+        "family": family,
+        "status": "NOTHING_COLLECTED" if collected_nothing else "OK",
+        **totals,
+    }
 
 
 @celery_app.task(name="tmo.collect_batch", bind=True, time_limit=None, soft_time_limit=None)

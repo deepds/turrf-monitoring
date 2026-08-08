@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any
@@ -32,6 +33,60 @@ from tmo.services.publication import finalize_snapshot
 from tmo.services.snapshot import create_snapshot
 
 logger = get_logger(__name__)
+
+#: Измеренная стоимость одного наблюдения по семейству и источнику, секунды.
+#: Ночь 08.08.2026, средняя задержка успешных попыток снимка 6.
+#:
+#: Это не настройка, а результат замера: он задаёт размер пачки так, чтобы она
+#: укладывалась в свой бюджет. Пачка фиксированного размера для семейств,
+#: различающихся в двадцать раз, гарантированно рвётся на дорогом: 40 авианаблюдений
+#: при одновременности 3 требуют 271 секунду против бюджета в 240, и каждая пачка
+#: закрывалась `BUDGET_EXHAUSTED`, не дойдя до трети своих наблюдений. За ночь так
+#: потерялось 219 наблюдений — не из-за источника, а из-за несогласованности
+#: двух констант.
+#:
+#: Пересматривать после каждого изменения одновременности или поведения источника.
+OBSERVATION_COST_SECONDS: dict[str, dict[str, float]] = {
+    "AIR": {"tutu_mcp": 20.3},
+    "HOTEL": {"tutu_mcp": 7.2},
+    "RAIL": {"tutu_mcp": 1.0, "rzd": 1.5},
+}
+
+#: Какую долю бюджета пачке позволено занять по расчёту. Остаток — на разброс
+#: задержек, повторы и запись: замер даёт среднее, а рвётся пачка по хвосту.
+BATCH_BUDGET_FILL = 0.7
+
+#: Границы размера пачки. Снизу — чтобы накладные расходы транзакций не съели
+#: выигрыш, сверху — чтобы отказ одной пачки не уносил слишком много работы.
+MIN_BATCH_SIZE = 20
+MAX_BATCH_SIZE = 400
+
+
+def batch_size_for_family(family: str | None, *, settings: Any = None) -> int:
+    """Сколько наблюдений семейства укладывается в бюджет одной пачки.
+
+    Источники внутри пачки обходятся последовательно, поэтому стоимость
+    наблюдения — это сумма по источникам, каждый со своей одновременностью.
+    """
+    from tmo.catalog.registry import source_registry
+
+    settings = settings or get_settings()
+    costs = OBSERVATION_COST_SECONDS.get(str(family or ""))
+    if not costs:
+        # Досбор идёт по дырам всех семейств сразу, стоимость смешанная —
+        # остаётся настроенный размер.
+        return settings.batch_size
+
+    registry = source_registry()
+    seconds_per_job = 0.0
+    for source_code, cost in costs.items():
+        concurrency = max(1, registry.get(source_code).concurrency)
+        seconds_per_job += cost / concurrency
+    if seconds_per_job <= 0:
+        return settings.batch_size
+
+    budget = settings.batch_soft_budget_seconds * BATCH_BUDGET_FILL
+    return max(MIN_BATCH_SIZE, min(MAX_BATCH_SIZE, int(budget / seconds_per_job)))
 
 
 @dataclass(slots=True)
@@ -73,11 +128,22 @@ def collect_jobs(
     batch_size: int | None = None,
     replay_mode: str | None = None,
     soft_budget_seconds: float | None = None,
+    family: str | None = None,
 ) -> dict[str, int]:
-    """Прогоняет наблюдения пачками. Каждая пачка — свои три фазы."""
+    """Прогоняет наблюдения пачками. Каждая пачка — свои три фазы.
+
+    Пачка, целиком пропущенная разомкнутой цепью, останавливает обход до её
+    остывания. Без паузы окно семейства расходуется впустую: в ночь
+    08.08.2026 сбор авиа прошёл все 218 пачек за шесть секунд, не сделав ни
+    одного обращения, и вернул успех. Цепь остывает за пять минут — дешевле
+    подождать их один раз, чем потерять восьмичасовое окно.
+    """
     settings = get_settings()
-    batch_size = batch_size or settings.batch_size
-    totals = {"attempts": 0, "offers": 0, "raw": 0, "batches": 0, "budget_exhausted": 0}
+    batch_size = batch_size or batch_size_for_family(family, settings=settings)
+    totals = {
+        "attempts": 0, "offers": 0, "raw": 0, "batches": 0,
+        "budget_exhausted": 0, "circuit_waits": 0, "batch_size": batch_size,
+    }
 
     for start in range(0, len(job_ids), batch_size):
         chunk = job_ids[start : start + batch_size]
@@ -93,6 +159,17 @@ def collect_jobs(
         totals["raw"] += report.raw_responses
         totals["batches"] += 1
         totals["budget_exhausted"] += int(report.budget_exhausted)
+
+        skipped_whole_batch = report.attempts == 0 and report.skipped_untouched >= len(chunk)
+        has_more = start + batch_size < len(job_ids)
+        if skipped_whole_batch and has_more:
+            logger.warning(
+                "Пачка пропущена целиком: пауза до остывания размыкателя",
+                skipped=report.skipped_untouched,
+                wait_seconds=settings.circuit_reset_seconds,
+            )
+            totals["circuit_waits"] += 1
+            time.sleep(settings.circuit_reset_seconds)
     return totals
 
 

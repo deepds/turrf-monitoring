@@ -208,12 +208,24 @@ class SourceTransport:
         self.backoff_base = backoff_base
         self.backoff_max = backoff_max
         self.call_count = 0
+        # Счётчик обращений одного наблюдения. Общий счётчик для этого не
+        # годится: клиент один на источник и делится между потоками пачки,
+        # поэтому его дельта, снятая вокруг одного наблюдения, включает чужие
+        # обращения и в конкуренции вырождается. В ночь 08.08.2026 из-за этого
+        # у Туту в базе стояло 0,01 обращения на наблюдение при фактических
+        # один-восемь, тогда как у РЖД, считающего сам, поле было верным.
+        self._local = threading.local()
         self._client = httpx.Client(
             timeout=httpx.Timeout(read_timeout, connect=connect_timeout),
             headers={"User-Agent": user_agent, **(default_headers or {})},
             follow_redirects=True,
             limits=httpx.Limits(max_connections=32, max_keepalive_connections=16),
         )
+
+    @property
+    def thread_call_count(self) -> int:
+        """Обращения, сделанные текущим потоком. Наблюдение живёт в одном."""
+        return int(getattr(self._local, "calls", 0))
 
     def close(self) -> None:
         self._client.close()
@@ -256,6 +268,7 @@ class SourceTransport:
                 )
             self.rate_limiter.acquire(budget=budget)
             self.call_count += 1
+            self._local.calls = self.thread_call_count + 1
             try:
                 response = self._client.request(method, url, **kwargs)
             except httpx.TimeoutException as exc:

@@ -27,8 +27,10 @@ x-app: &app
     TMO_LOG_FORMAT: json
     TMO_ADMIN_TOKEN: ${TMO_ADMIN_TOKEN:-}
     TMO_CORS_ORIGINS: ${TMO_CORS_ORIGINS:-http://localhost:8090}
-    TMO_TUTU_CONCURRENCY: ${TMO_TUTU_CONCURRENCY:-8}
-    TMO_RZD_CONCURRENCY: ${TMO_RZD_CONCURRENCY:-4}
+    # Одновременность и темп обращений задаются в реестре источников
+    # (`tmo/catalog/data/sources.yaml`). Здесь их не было смысла подставлять:
+    # переменные не читались сбором, а значение 8 расходилось с рабочей точкой
+    # и вводило в заблуждение при разборе инцидента.
   volumes:
     - raw_storage:/var/tmo/raw
     - export_storage:/var/tmo/export

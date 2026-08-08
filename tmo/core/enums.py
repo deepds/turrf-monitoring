@@ -76,6 +76,20 @@ class JobStatus(StrEnum):
         """Техническая дыра, подлежащая досбору (SCOPE-R P5.1)."""
         return self in (JobStatus.FAILED, JobStatus.PLANNED, JobStatus.DISPATCHED, JobStatus.RUNNING)
 
+    @property
+    def is_collected(self) -> bool:
+        """Наблюдение закрыто ответом о рынке и повторному сбору не подлежит.
+
+        Точное дополнение к ``is_hole``: ``FAILED`` сюда не входит намеренно —
+        это дыра, которую досбор обязан закрыть. Отличается от
+        ``is_completed`` ровно на ``FAILED``.
+
+        Граница нужна там, где наблюдение отправляют в работу повторно:
+        собранное наблюдение нельзя переводить в ``RUNNING``, иначе пачка,
+        упёршаяся в разомкнутую цепь, вернёт его в план как несобранное.
+        """
+        return self in (JobStatus.SUCCESS, JobStatus.PARTIAL, JobStatus.NO_MARKET)
+
 
 class AttemptOutcome(StrEnum):
     """Исход одного обращения к источнику (SCOPE-R P1.4).

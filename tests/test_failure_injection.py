@@ -151,8 +151,13 @@ def test_budget_reports_exhaustion_without_killing_collected_data() -> None:
 
 
 def test_child_budget_never_exceeds_parent() -> None:
+    # Остаток снимается до создания вложенного бюджета, а не после: между двумя
+    # чтениями часов проходит время, и на часах с наносекундным разрешением
+    # остаток «после» всегда меньше — сравнение с ним падало бы независимо от
+    # проверяемого свойства.
     parent = TimeBudget(total_seconds=10)
-    assert parent.child(60).total_seconds <= parent.remaining
+    remaining_before = parent.remaining
+    assert parent.child(60).total_seconds <= remaining_before
 
 
 def test_rate_limiter_refuses_to_wait_beyond_budget() -> None:

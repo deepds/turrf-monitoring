@@ -569,6 +569,12 @@ def run_batch(
         for job in session.scalars(
             sa_select(models.CollectionJob).where(models.CollectionJob.id.in_(job_ids))
         ):
+            # Отметка «выполняется» ставится только тому, что ещё предстоит
+            # собрать. Наблюдение с терминальным статусом уже описано попыткой,
+            # и переводить его в RUNNING значит стирать результат: пачка,
+            # упёршаяся в разомкнутую цепь, вернёт его в план как несобранное.
+            if JobStatus(job.status).is_collected:
+                continue
             if job.first_dispatched_at is None:
                 job.first_dispatched_at = now_utc()
             job.status = JobStatus.RUNNING
@@ -583,9 +589,20 @@ def run_batch(
             # Наблюдение, до которого сбор не дошёл, обязано вернуться в план,
             # а не остаться «выполняющимся»: иначе оно выглядит обработанным и
             # не попадает ни в дыры, ни в досбор.
+            #
+            # Условие по статусу — вторая линия обороны к проверке выше. В ночь
+            # 08.08.2026 этот запрос вернул в план 6 116 уже собранных
+            # наблюдений проживания и обрушил покрытие с 98 % до 45 %: он
+            # обновлял по одному лишь списку идентификаторов, не глядя, что
+            # наблюдение давно закрыто успехом.
             session.execute(
                 sa_update(models.CollectionJob)
-                .where(models.CollectionJob.id.in_(untouched))
+                .where(
+                    models.CollectionJob.id.in_(untouched),
+                    models.CollectionJob.status.in_(
+                        [JobStatus.RUNNING.value, JobStatus.DISPATCHED.value]
+                    ),
+                )
                 .values(status=JobStatus.PLANNED.value)
             )
 

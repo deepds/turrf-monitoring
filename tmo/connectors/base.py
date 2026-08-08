@@ -90,7 +90,9 @@ class BaseConnector(ABC):
         # Источник воспроизведения сети не имеет вовсе: счётчик обращений у
         # него нулевой, и это не ошибка, а свойство.
         transport = self.transport() if self.uses_network else None
-        calls_before = transport.call_count if transport else 0
+        # Счётчик берётся пооточный: клиент общий на источник, и дельта его
+        # общего счётчика вокруг одного наблюдения считает чужие обращения.
+        calls_before = transport.thread_call_count if transport else 0
         try:
             if isinstance(query, RailQuery):
                 result = self.collect_rail(query, budget)
@@ -122,7 +124,7 @@ class BaseConnector(ABC):
         result.fetched_at = result.fetched_at or now_utc()
         result.latency_ms = result.latency_ms or int((time.perf_counter() - started) * 1000)
         result.http_calls = result.http_calls or (
-            (transport.call_count - calls_before) if transport else 0
+            (transport.thread_call_count - calls_before) if transport else 0
         )
         result.connector_version = self.version
         return result

@@ -17,7 +17,7 @@ from typing import Any
 from tmo.core.config import get_settings
 from tmo.core.enums import CollectionFamily
 from tmo.core.logging import configure_logging
-from tmo.core.timeutil import snapshot_date_for
+from tmo.core.timeutil import operational_date_for
 
 
 def _print(payload: Any) -> None:
@@ -27,10 +27,17 @@ def _print(payload: Any) -> None:
 
 
 def _parse_date(value: str | None) -> date | None:
+    """Разбирает `--snapshot-date`.
+
+    ``today`` означает текущий цикл сбора, а не календарный день: после 21:00
+    ночной цикл работает уже над завтрашним снимком, и оператор, запустивший
+    досбор в 22:30, должен попасть в тот же снимок, что и планировщик, а не
+    завести второй за вчерашнюю дату.
+    """
     if value in (None, "today"):
-        return snapshot_date_for() if value == "today" else None
+        return operational_date_for() if value == "today" else None
     if value == "yesterday":
-        return snapshot_date_for() - timedelta(days=1)
+        return operational_date_for() - timedelta(days=1)
     return date.fromisoformat(value)
 
 
@@ -59,7 +66,7 @@ def cmd_init_db(args: argparse.Namespace) -> int:
 def cmd_plan(args: argparse.Namespace) -> int:
     from tmo.planner.matrix import build_matrix, expected_size
 
-    target = _parse_date(args.snapshot_date) or snapshot_date_for()
+    target = _parse_date(args.snapshot_date) or operational_date_for()
     matrix = build_matrix(target, horizon_days=args.horizon, families=_families(args.families))
     _print(
         {
@@ -118,7 +125,7 @@ def cmd_recalculate(args: argparse.Namespace) -> int:
     from tmo.db.session import session_scope
     from tmo.services.pipeline import recalculate
 
-    target = _parse_date(args.snapshot_date) or snapshot_date_for()
+    target = _parse_date(args.snapshot_date) or operational_date_for()
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)
@@ -140,7 +147,7 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     from tmo.db.session import session_scope
     from tmo.services.coverage import compute_coverage
 
-    target = _parse_date(args.snapshot_date) or snapshot_date_for()
+    target = _parse_date(args.snapshot_date) or operational_date_for()
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)

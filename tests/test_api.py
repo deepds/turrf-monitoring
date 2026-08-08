@@ -231,10 +231,24 @@ def test_reference_endpoints(client: TestClient) -> None:
     assert {item["code"] for item in sources["sources"]} >= {"tutu_mcp", "rzd"}
 
 
-def test_admin_is_closed_without_token(client: TestClient) -> None:
-    """Пустой токен означает «выключено», а не «открыто всем»."""
-    response = client.post(f"/api/v1/admin/snapshots/{SNAPSHOT.isoformat()}/retry")
-    assert response.status_code == 403
+def test_admin_is_closed_without_token(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Пустой токен означает «выключено», а не «открыто всем».
+
+    Токен задаётся явно пустым: в развёрнутом окружении он приходит из `.env`,
+    и тест, полагающийся на его отсутствие, проверял бы там другую ветку —
+    «неверный токен» вместо «операции выключены».
+    """
+    from tmo.core.config import reset_settings_cache
+
+    monkeypatch.setenv("TMO_ADMIN_TOKEN", "")
+    reset_settings_cache()
+    try:
+        response = client.post(f"/api/v1/admin/snapshots/{SNAPSHOT.isoformat()}/retry")
+        assert response.status_code == 403
+    finally:
+        reset_settings_cache()
 
 
 def test_openapi_is_served(client: TestClient) -> None:

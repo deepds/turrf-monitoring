@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from tmo.core.config import get_settings
 from tmo.core.enums import JobStatus
 from tmo.core.logging import get_logger
-from tmo.core.timeutil import now_utc, snapshot_date_for
+from tmo.core.timeutil import now_utc, operational_date_for
 from tmo.db import models
 from tmo.db.session import session_scope
 from tmo.storage.raw_store import RawStore
@@ -25,6 +25,10 @@ logger = get_logger(__name__)
 #: Сколько суток хранятся тела сырых ответов. Метаданные, Offers и метрики
 #: не удаляются никогда: без них цифру нельзя объяснить.
 RAW_RETENTION_DAYS = 45
+
+#: Наблюдения, действительно отданные в очередь. ``PLANNED`` исключён
+#: намеренно — обоснование в ``tmo.tasks.health``, где та же граница.
+IN_FLIGHT_STATUSES = (JobStatus.DISPATCHED.value, JobStatus.RUNNING.value)
 
 
 @celery_app.task(name="tmo.watch_collection_progress", time_limit=300)
@@ -42,7 +46,7 @@ def watch_collection_progress() -> dict[str, Any]:
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)
-            .where(models.MarketSnapshot.snapshot_date == snapshot_date_for())
+            .where(models.MarketSnapshot.snapshot_date == operational_date_for())
             .order_by(models.MarketSnapshot.attempt_no.desc())
             .limit(1)
         )
@@ -52,13 +56,13 @@ def watch_collection_progress() -> dict[str, Any]:
         pending = session.scalar(
             select(func.count(models.CollectionJob.id)).where(
                 models.CollectionJob.snapshot_id == snapshot_id,
-                models.CollectionJob.status.in_(
-                    [JobStatus.PLANNED.value, JobStatus.DISPATCHED.value, JobStatus.RUNNING.value]
-                ),
+                models.CollectionJob.status.in_(IN_FLIGHT_STATUSES),
             )
         )
         if not pending:
-            # Пустая очередь — это здоровье: разбирать нечего, молчание законно.
+            # В работе ничего нет — это здоровье: разбирать нечего, молчание
+            # законно. Запланированные на более поздний час семейства сюда не
+            # попадают, иначе пауза расписания читается как застой.
             return {"status": "IDLE", "snapshot_id": snapshot_id, "pending": 0}
 
         last_completion = session.scalar(
@@ -74,14 +78,34 @@ def watch_collection_progress() -> dict[str, Any]:
     stalled = idle_for > threshold
     if stalled:
         logger.error(
-            "Сбор стоит: очередь не пуста, завершений нет",
+            "Сбор стоит: работа отдана в очередь, завершений нет",
             snapshot_id=snapshot_id,
             pending=pending,
             idle_minutes=round(idle_for.total_seconds() / 60, 1),
         )
-        celery_app.control.pool_restart(reload=False, destination=None)
+        # Перезапуск пула требует воркера, запущенного с `--pool-restarts`;
+        # иначе он отвечает `ValueError: Pool restarts not enabled`, и отказ
+        # виден только в логе воркера — сама задача завершается успешно и
+        # выглядит так, будто лечение состоялось. Разница между «починил» и
+        # «попросил и получил отказ» обязана быть видимой.
+        try:
+            celery_app.control.pool_restart(reload=False, destination=None)
+            remedy = "POOL_RESTART_REQUESTED"
+        except Exception as exc:
+            logger.error(
+                "Перезапуск пула недоступен: лечение остаётся за autoheal",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            remedy = "POOL_RESTART_UNAVAILABLE"
+        return {
+            "status": "STALLED",
+            "snapshot_id": snapshot_id,
+            "pending": pending,
+            "idle_minutes": round(idle_for.total_seconds() / 60, 1),
+            "remedy": remedy,
+        }
     return {
-        "status": "STALLED" if stalled else "PROGRESSING",
+        "status": "PROGRESSING",
         "snapshot_id": snapshot_id,
         "pending": pending,
         "idle_minutes": round(idle_for.total_seconds() / 60, 1),
@@ -111,7 +135,7 @@ def daily_quality_digest(snapshot_date: str | None = None) -> dict[str, Any]:
     from tmo.services.coverage import compute_coverage
     from tmo.services.showcase import snapshot_overview
 
-    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else operational_date_for()
     with session_scope() as session:
         snapshot = session.scalars(
             select(models.MarketSnapshot)
