@@ -1,12 +1,14 @@
 """Транспортный слой обращений к источникам.
 
-Здесь собраны три предохранителя, каждый из которых поставлен по конкретному
-инциденту первой версии:
+Здесь собраны четыре предохранителя, каждый из которых поставлен по конкретному
+инциденту:
 
 * **лимит темпа** — одновременный залп из тысячи с лишним наблюдений источник
   не держит, и именно он открывал размыкатель цепи;
+* **регулятор одновременности** — сколько потоков источник выдерживает
+  *сейчас*, выясняется опытом, а не настройкой;
 * **размыкатель цепи** — после серии отказов перестаём спрашивать вовсе, иначе
-  ночь уходит на таймауты;
+  сутки уходят на таймауты;
 * **бюджет времени** — жёсткий обрыв задачи уничтожал уже собранное, поэтому
   обход прекращается добровольно и результат помечается частичным.
 
@@ -68,6 +70,86 @@ class RateLimiter:
                 )
             time.sleep(min(sleep_for, 5.0))
             waited += min(sleep_for, 5.0)
+
+
+class AdaptiveConcurrency:
+    """Сколько потоков источник выдерживает сейчас.
+
+    Фиксированная одновременность описывает источник в тот час, когда её
+    измерили. Замеры 08.08.2026 показали, что это разные источники:
+
+    ==========  ==================  ====================================
+    Время       Авианаблюдение      Чем кончилось при 12 потоках
+    ==========  ==================  ====================================
+    ночь        22 с (p50)          собиралось
+    день        147 с               размыкание цепи через девять минут
+    ==========  ==================  ====================================
+
+    Разница в семь раз, и настройкой её не покрыть: точка, безопасная ночью,
+    днём ломает источник, а дневная точка ночью не укладывается ни в какое
+    окно. Поэтому число потоков не задаётся, а **выясняется**: растёт на
+    единицу за серию чистых обращений, падает вдвое на отказе.
+
+    Падение вдвое, а рост по единице — намеренно. Вернуть потерянную скорость
+    дёшево, а повторно уронить источник дорого: за отказом следует размыкание
+    цепи, а за ним пять минут, в которые не собирается ничего.
+
+    Потолок — значение из реестра источников: регулятор ищет рабочую точку
+    **под** ней, а не поверх. Пол равен единице: полностью прекращать
+    спрашивать — работа размыкателя, а не эта.
+    """
+
+    #: Отказы, пришедшие из разных потоков об одном и том же, — это один
+    #: отказ. Без этого залп из двенадцати параллельных 503 уронил бы
+    #: одновременность с 12 до 1 за один приём, хотя источнику плохо один раз.
+    COLLAPSE_SECONDS = 5.0
+
+    def __init__(self, *, ceiling: int, floor: int = 1, growth_after: int = 32) -> None:
+        self.ceiling = max(1, ceiling)
+        self.floor = max(1, min(floor, self.ceiling))
+        self.growth_after = max(1, growth_after)
+        self._current = float(self.ceiling)
+        self._clean_streak = 0
+        self._last_decrease: float | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def current(self) -> int:
+        with self._lock:
+            return max(self.floor, min(self.ceiling, int(self._current)))
+
+    def record_success(self) -> None:
+        with self._lock:
+            self._clean_streak += 1
+            if self._clean_streak >= self.growth_after and self._current < self.ceiling:
+                self._current = min(float(self.ceiling), self._current + 1.0)
+                self._clean_streak = 0
+                logger.info(
+                    "Одновременность повышена",
+                    value=int(self._current),
+                    ceiling=self.ceiling,
+                )
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self._clean_streak = 0
+            now = time.monotonic()
+            if (
+                self._last_decrease is not None
+                and now - self._last_decrease < self.COLLAPSE_SECONDS
+            ):
+                return
+            if self._current <= self.floor:
+                return
+            self._last_decrease = now
+            previous = int(self._current)
+            self._current = max(float(self.floor), self._current / 2.0)
+            logger.warning(
+                "Одновременность снижена после отказа источника",
+                was=previous,
+                value=int(self._current),
+                floor=self.floor,
+            )
 
 
 class CircuitBreaker:
@@ -192,6 +274,7 @@ class SourceTransport:
         allowed_hosts: tuple[str, ...],
         rate_limiter: RateLimiter,
         circuit: CircuitBreaker,
+        governor: AdaptiveConcurrency | None = None,
         connect_timeout: float = 10.0,
         read_timeout: float = 45.0,
         max_retries: int = 2,
@@ -204,6 +287,9 @@ class SourceTransport:
         self.allowed_hosts = tuple(allowed_hosts)
         self.rate_limiter = rate_limiter
         self.circuit = circuit
+        #: Регулятор необязателен: точечные проверки источника и воспроизведение
+        #: записанных ответов рабочую точку не ищут.
+        self.governor = governor
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self.backoff_max = backoff_max
@@ -292,6 +378,8 @@ class SourceTransport:
                     )
                 else:
                     self.circuit.record_success()
+                    if self.governor is not None:
+                        self.governor.record_success()
                     return response
 
             if attempt >= self.max_retries:
@@ -303,6 +391,11 @@ class SourceTransport:
             time.sleep(delay)
 
         self.circuit.record_failure(last_error)
+        if self.governor is not None:
+            # Снижение идёт до размыкания, а не после: цепь — последняя мера, а
+            # регулятор обязан успеть найти рабочую точку раньше, чем сбор
+            # встанет на пять минут.
+            self.governor.record_failure()
         raise last_error or ConnectorTransportError(
             f"Не удалось обратиться к {self.source_code}", source_code=self.source_code
         )
@@ -315,15 +408,18 @@ class SourceTransport:
 
 
 class TransportPool:
-    """Общие на процесс лимитеры и размыкатели по коду источника.
+    """Общие на процесс лимитеры, регуляторы и размыкатели по коду источника.
 
     Лимит темпа обязан быть общим: два воркерских потока со своими счётчиками
-    дают вдвое больший фактический темп, чем настроено.
+    дают вдвое больший фактический темп, чем настроено. То же и с регулятором:
+    два независимых регулятора нашли бы каждый свою рабочую точку и сложили бы
+    их на одном источнике.
     """
 
     def __init__(self) -> None:
         self._limiters: dict[str, RateLimiter] = {}
         self._circuits: dict[str, CircuitBreaker] = {}
+        self._governors: dict[str, AdaptiveConcurrency] = {}
         self._lock = threading.Lock()
 
     def limiter(self, source_code: str, per_minute: int) -> RateLimiter:
@@ -338,10 +434,31 @@ class TransportPool:
                 self._circuits[source_code] = CircuitBreaker(threshold, reset_seconds)
             return self._circuits[source_code]
 
+    def governor(
+        self, source_code: str, ceiling: int, *, floor: int = 1, growth_after: int = 32
+    ) -> AdaptiveConcurrency:
+        with self._lock:
+            if source_code not in self._governors:
+                self._governors[source_code] = AdaptiveConcurrency(
+                    ceiling=ceiling, floor=floor, growth_after=growth_after
+                )
+            return self._governors[source_code]
+
+    def current_concurrency(self, source_code: str, default: int) -> int:
+        """Рабочая точка источника, если она уже нащупана.
+
+        Не создаёт регулятор: планирование размера пачки — не повод заводить
+        состояние на источник, к которому в этом процессе ещё не обращались.
+        """
+        with self._lock:
+            governor = self._governors.get(source_code)
+        return governor.current if governor is not None else default
+
     def reset(self) -> None:
         with self._lock:
             self._limiters.clear()
             self._circuits.clear()
+            self._governors.clear()
 
 
 #: Пул на процесс. Воркер Celery работает в одном процессе на пул потоков.

@@ -1,9 +1,17 @@
 """Задачи сбора и расчёта.
 
-У каждого семейства свой мягкий бюджет и свой жёсткий таймаут, причём мягкий
-строго меньше жёсткого: при исчерпании мягкого обход прекращается сам,
-собранное сохраняется и помечается частичным. Жёсткий остаётся последней
-страховкой и в норме не срабатывает — он уничтожает уже собранное.
+Шаги цикла выдаёт диспетчер ``advance_snapshot`` — по состоянию снимка, а не по
+часам. Расписание знает только один момент: когда открывать новые операционные
+сутки. Всё остальное решает ``tmo.services.cycle``.
+
+Каждый шаг работает под арендой (``tmo.tasks.lease``). Аренда делает две вещи,
+которых расписание не делало: не даёт двум шагам идти одновременно и возвращает
+шаг в работу, если его исполнитель умер.
+
+У каждого шага свой мягкий бюджет и свой жёсткий таймаут, причём мягкий строго
+меньше жёсткого: при исчерпании мягкого обход прекращается сам, собранное
+сохраняется и помечается частичным. Жёсткий остаётся последней страховкой и в
+норме не срабатывает — он уничтожает уже собранное.
 """
 
 from __future__ import annotations
@@ -20,14 +28,21 @@ from tmo.core.logging import get_logger, log_context
 from tmo.core.timeutil import now_utc, snapshot_date_for
 from tmo.db import models
 from tmo.db.session import session_scope
+from tmo.services import cycle
 from tmo.services.calculation import calculate_snapshot as calculate_service
 from tmo.services.coverage import find_holes
 from tmo.services.pipeline import collect_jobs
 from tmo.services.publication import finalize_snapshot as finalize_service
 from tmo.services.snapshot import create_snapshot
+from tmo.tasks import lease
 from tmo.tasks.celery_app import celery_app
 
 logger = get_logger(__name__)
+
+#: Жёсткий предел одного захода досбора. Три часа: заход короткий, но упереться
+#: он может в ту же стену, что и первичный сбор, — пятиминутные паузы остывания
+#: цепи на дорогом семействе.
+RECOVER_TIME_LIMIT = 3 * 3600
 
 #: Статусы наблюдений, закрытых ответом о рынке. Повторный сбор их не касается.
 COLLECTED_JOB_STATUSES = [status.value for status in JobStatus if status.is_collected]
@@ -47,10 +62,77 @@ def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | No
     )
 
 
+@celery_app.task(name="tmo.advance_snapshot", bind=True, time_limit=120)
+def advance_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
+    """Диспетчер цикла: выдаёт ровно один следующий шаг.
+
+    Сам не собирает и не считает — только смотрит на состояние снимка и ставит
+    в очередь то, что должно идти сейчас. Поэтому он короткий, живёт на
+    свободном воркере обслуживания и не может застрять за тем, чем управляет.
+
+    Повторный запуск безвреден: занятый шаг держит аренду и второй раз не
+    возьмётся. Именно на этом держится восстановление после отказа — диспетчер
+    срабатывает каждые несколько минут и подхватывает шаг, чей исполнитель умер,
+    не дожидаясь, пока брокер вернёт потерянную задачу.
+    """
+    settings = _settings()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
+
+    with session_scope() as session:
+        step = cycle.next_step(
+            session, target, max_job_attempts=settings.max_job_attempts
+        )
+
+    if step.step == cycle.STEP_IDLE:
+        return step.as_dict()
+
+    lease_name = {
+        cycle.STEP_OPEN: f"open:{target.isoformat()}",
+        cycle.STEP_COLLECT: f"collect:{target.isoformat()}:{step.family}",
+        cycle.STEP_RECOVER: f"recover:{step.snapshot_id}",
+        cycle.STEP_CLOSE: f"close:{step.snapshot_id}",
+    }[step.step]
+
+    if lease.is_held(lease_name):
+        return {**step.as_dict(), "dispatched": False, "note": "Шаг уже выполняется"}
+
+    dispatch = {
+        cycle.STEP_OPEN: lambda: open_snapshot.delay(snapshot_date=target.isoformat()),
+        cycle.STEP_COLLECT: lambda: collect_family.delay(
+            family=step.family, snapshot_date=target.isoformat()
+        ),
+        cycle.STEP_RECOVER: lambda: recover_snapshot.delay(snapshot_id=step.snapshot_id),
+        cycle.STEP_CLOSE: lambda: close_snapshot.delay(snapshot_id=step.snapshot_id),
+    }[step.step]
+
+    dispatch()
+    logger.info("Шаг цикла поставлен в очередь", **step.as_dict())
+    return {**step.as_dict(), "dispatched": True}
+
+
 @celery_app.task(name="tmo.open_snapshot", bind=True, time_limit=900, soft_time_limit=600)
 def open_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
-    """Создаёт снимок и план на операционные сутки."""
+    """Создаёт снимок и план на операционные сутки.
+
+    Под арендой: открытие приходит из двух мест — из расписания в 00:30 и от
+    диспетчера, обнаружившего, что снимка нет. Два одновременных открытия дали
+    бы второй снимок с ``attempt_no=2`` и осиротевшим планом первого, а сбор
+    пошёл бы по второму: ``_current_snapshot_id`` берёт наибольшую попытку.
+    """
     target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
+    with lease.acquire(f"open:{target.isoformat()}") as held:
+        if held is None:
+            logger.info("Снимок уже открывается: шаг пропущен", snapshot_date=target.isoformat())
+            return {"status": "ALREADY_RUNNING", "snapshot_date": target.isoformat()}
+        return _open_snapshot(target)
+
+
+def _open_snapshot(target: date) -> dict[str, Any]:
+    with session_scope() as session:
+        existing = _current_snapshot_id(session, target)
+        if existing is not None:
+            logger.info("Снимок за эти сутки уже открыт", snapshot_id=existing)
+            return {"status": "ALREADY_OPEN", "snapshot_id": existing}
     with session_scope() as session:
         creation = create_snapshot(session, snapshot_date=target)
     logger.info("Снимок открыт", snapshot_id=creation.snapshot_id, planned=creation.planned)
@@ -76,8 +158,20 @@ COLLECT_FAMILY_TIME_LIMIT = 10 * 3600
     soft_time_limit=COLLECT_FAMILY_TIME_LIMIT - 300,
 )
 def collect_family(self, family: str, snapshot_date: str | None = None) -> dict[str, Any]:
-    """Собирает одно семейство наблюдений текущего снимка."""
+    """Собирает одно семейство наблюдений текущего снимка.
+
+    Идёт под арендой: два сбора одного семейства — это удвоенная одновременность
+    на источнике, а не удвоенная скорость.
+    """
     target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
+    with lease.acquire(f"collect:{target.isoformat()}:{family}") as held:
+        if held is None:
+            logger.info("Сбор семейства уже идёт: шаг пропущен", family=family)
+            return {"status": "ALREADY_RUNNING", "family": family}
+        return _collect_family(family, target, held)
+
+
+def _collect_family(family: str, target: date, held: lease.Lease) -> dict[str, Any]:
     with session_scope() as session:
         snapshot_id = _current_snapshot_id(session, target)
         if snapshot_id is None:
@@ -112,7 +206,13 @@ def collect_family(self, family: str, snapshot_date: str | None = None) -> dict[
             jobs=len(job_ids),
             already_collected=planned_total - len(job_ids),
         )
-        totals = collect_jobs(job_ids, execution_scope="PRIMARY", family=family)
+        totals = collect_jobs(
+            job_ids,
+            execution_scope="PRIMARY",
+            family=family,
+            deadline=cycle.day_deadline(target),
+            on_progress=held.renew,
+        )
 
     # Ноль обращений при непустой выборке — это не успех. Так выглядит проход
     # по разомкнутой цепи: все пачки пропущены, окно семейства израсходовано,
@@ -150,39 +250,64 @@ def collect_batch(self, job_ids: list[int], execution_scope: str = "PRIMARY",
     return asdict(report)
 
 
-@celery_app.task(name="tmo.recover_snapshot", bind=True, time_limit=3 * 3600)
-def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 2) -> dict[str, Any]:
-    """Досбор технических дыр.
+@celery_app.task(name="tmo.recover_snapshot", bind=True, time_limit=RECOVER_TIME_LIMIT)
+def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> dict[str, Any]:
+    """Досбор технических дыр — один заход.
+
+    Настойчивость обеспечивает не эта задача, а диспетчер: он выдаёт досбор
+    снова и снова, пока дыры есть. Заход короткий намеренно. Задача, которая
+    сама крутится до победы, — это состояние в памяти процесса: перезапуск
+    воркера теряет его целиком, а брокер возвращает такую задачу только по
+    истечении своего окна видимости, то есть через двадцать часов. Состояние в
+    базе переживает и перезапуск, и потерю задачи.
 
     Идёт с солью в ключе идемпотентности: без неё повторное исполнение той же
-    области молча вернуло бы прежний результат вместо новой попытки.
+    области молча вернуло бы прежний результат вместо новой попытки. Соль
+    включает номер захода в пределах суток, поэтому каждый досбор — новая
+    попытка, а не повтор прежней.
     """
+    settings = _settings()
     with session_scope() as session:
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
-        snapshot.status = SnapshotStatus.RECOVERING
+        target = snapshot.snapshot_date
 
-    totals = {"rounds": 0, "attempts": 0, "offers": 0}
-    with log_context(snapshot_id=snapshot_id):
-        for attempt in range(1, rounds + 1):
-            with session_scope() as session:
-                holes = find_holes(session, snapshot_id)
-            if not holes:
-                break
-            logger.info("Досбор", round=attempt, holes=len(holes))
-            result = collect_jobs(
-                holes, execution_scope="RECOVERY", attempt_salt=f"recovery-{attempt}"
-            )
-            totals["rounds"] = attempt
-            totals["attempts"] += result["attempts"]
-            totals["offers"] += result["offers"]
+    with lease.acquire(f"recover:{snapshot_id}") as held:
+        if held is None:
+            logger.info("Досбор уже идёт: шаг пропущен", snapshot_id=snapshot_id)
+            return {"status": "ALREADY_RUNNING", "snapshot_id": snapshot_id}
 
-    with session_scope() as session:
-        snapshot = session.get(models.MarketSnapshot, snapshot_id)
-        snapshot.recovery_finished_at = now_utc()
-    return {"snapshot_id": snapshot_id, **totals}
+        with session_scope() as session:
+            snapshot = session.get(models.MarketSnapshot, snapshot_id)
+            snapshot.status = SnapshotStatus.RECOVERING
+
+        totals = {"rounds": 0, "attempts": 0, "offers": 0}
+        with log_context(snapshot_id=snapshot_id):
+            for attempt in range(1, rounds + 1):
+                with session_scope() as session:
+                    holes = find_holes(
+                        session, snapshot_id, max_attempts=settings.max_job_attempts
+                    )
+                if not holes:
+                    break
+                logger.info("Досбор", round=attempt, holes=len(holes))
+                result = collect_jobs(
+                    holes,
+                    execution_scope="RECOVERY",
+                    attempt_salt=f"recovery-{now_utc().strftime('%H%M%S')}-{attempt}",
+                    deadline=cycle.day_deadline(target),
+                    on_progress=held.renew,
+                )
+                totals["rounds"] = attempt
+                totals["attempts"] += result["attempts"]
+                totals["offers"] += result["offers"]
+
+        with session_scope() as session:
+            snapshot = session.get(models.MarketSnapshot, snapshot_id)
+            snapshot.recovery_finished_at = now_utc()
+        return {"snapshot_id": snapshot_id, **totals}
 
 
 @celery_app.task(name="tmo.calculate_snapshot", bind=True, time_limit=2 * 3600)
@@ -208,6 +333,55 @@ def recalculate_snapshot(self, snapshot_id: int,
     from tmo.services.pipeline import recalculate
 
     return recalculate(snapshot_id, profile_version=profile_version, make_active=make_active)
+
+
+@celery_app.task(name="tmo.close_snapshot", bind=True, time_limit=3 * 3600)
+def close_snapshot(self, snapshot_id: int | None = None,
+                   profile_version: str | None = None) -> dict[str, Any]:
+    """Расчёт и финализация одним шагом.
+
+    Раздельные записи расписания на 09:00 и 09:30 разошлись с реальностью в
+    первую же ночь: расчёт стартовал, когда сбор ещё шёл, а финализация — когда
+    шёл уже расчёт. Между этими двумя действиями нет ничего, ради чего стоило бы
+    рисковать промежутком: расчёт без финализации оставляет снимок в
+    ``CALCULATING`` навсегда, а финализация без расчёта проваливает ворота
+    ``NO_CALCULATION_RUN``.
+    """
+    with session_scope() as session:
+        snapshot_id = snapshot_id or _current_snapshot_id(session)
+        if snapshot_id is None:
+            return {"status": "NO_SNAPSHOT"}
+
+    with lease.acquire(f"close:{snapshot_id}") as held:
+        if held is None:
+            logger.info("Закрытие снимка уже идёт: шаг пропущен", snapshot_id=snapshot_id)
+            return {"status": "ALREADY_RUNNING", "snapshot_id": snapshot_id}
+
+        with log_context(snapshot_id=snapshot_id):
+            with session_scope() as session:
+                snapshot = session.get(models.MarketSnapshot, snapshot_id)
+                snapshot.status = SnapshotStatus.CALCULATING
+            with session_scope() as session:
+                calculation = calculate_service(
+                    session, snapshot_id, profile_version=profile_version
+                )
+            held.renew()
+            with session_scope() as session:
+                publication = finalize_service(session, snapshot_id)
+        logger.info(
+            "Снимок закрыт",
+            snapshot_id=snapshot_id,
+            status=publication.status,
+            coverage_total=publication.coverage_total,
+        )
+        return {
+            "snapshot_id": snapshot_id,
+            "metrics": calculation.metrics,
+            "trip_rows": calculation.trip_rows,
+            "status": publication.status,
+            "coverage_total": publication.coverage_total,
+            "notes": [note["code"] for note in publication.notes],
+        }
 
 
 @celery_app.task(name="tmo.finalize_snapshot", bind=True, time_limit=1800)

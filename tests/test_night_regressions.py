@@ -388,26 +388,53 @@ def test_unknown_family_falls_back_to_configured_batch_size() -> None:
     assert batch_size_for_family(None) == get_settings().batch_size
 
 
-def test_schedule_starts_the_most_expensive_family_first() -> None:
-    """Авиа стоит шестнадцать часов и обязано начинать первым.
+def test_schedule_holds_only_the_start_of_the_day() -> None:
+    """Расписание обязано знать один час — начало операционных суток.
 
-    Проверяется не порядок ради порядка: при старте в 02:00 авиа получало три
-    часа до расчёта и собирало 3,5 % семейства.
+    Всё остальное выдаёт диспетчер по состоянию снимка. Возврат любого шага
+    цикла в расписание вернул бы и то, ради чего он оттуда убран: часы выражают
+    намерение и ничего не гарантируют. Затянувшийся сбор авиа не задерживал
+    следующее семейство, а шёл рядом с ним — воркер держит восемь потоков, и
+    каждая задача заводила свой пул из двенадцати.
     """
     celery_app = _loaded_celery_app()
-    schedule = celery_app.conf.beat_schedule
+    scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
 
-    def at(entry_name: str) -> int:
-        """Минуты от полуночи: цикл целиком лежит внутри одних суток."""
-        entry = schedule[entry_name]["schedule"]
-        return min(entry.hour) * 60 + min(entry.minute)
+    steps = {"tmo.collect_family", "tmo.recover_snapshot", "tmo.calculate_snapshot",
+             "tmo.finalize_snapshot", "tmo.close_snapshot"}
+    assert not (scheduled & steps), (
+        f"шаги цикла вернулись в расписание: {sorted(scheduled & steps)}"
+    )
+    assert "tmo.advance_snapshot" in scheduled, "диспетчер обязан быть в расписании"
+    assert "tmo.open_snapshot" in scheduled, "начало суток остаётся за расписанием"
 
-    air = at("collect-air")
-    for cheap in ("collect-rail", "collect-hotel"):
-        assert at(cheap) > air, f"{cheap} дешевле авиа и обязано идти после него"
-        assert at(cheap) < at("recover-holes"), f"{cheap} обязано успеть до досбора"
-    assert at("open-snapshot") <= air, "снимок открывается не позже первого сбора"
-    assert at("recover-holes") < at("calculate") < at("finalize")
+
+def test_dispatcher_runs_off_the_queue_it_dispatches_to() -> None:
+    """Тот, кто раздаёт работу, не должен стоять в очереди, которую раздаёт.
+
+    Диспетчер на очереди сбора не сработал бы ровно тогда, когда нужен: пул,
+    занятый восьмичасовым сбором авиа, не взял бы его в работу.
+    """
+    celery_app = _loaded_celery_app()
+    routes = celery_app.conf.task_routes
+
+    assert routes["tmo.advance_snapshot"]["queue"] == "maintenance"
+    for step in ("tmo.collect_family", "tmo.recover_snapshot"):
+        assert routes[step]["queue"] == "collect"
+
+
+def test_recovery_shares_the_rate_limiter_with_collection() -> None:
+    """Досбор обязан идти тем же процессом, что и сбор.
+
+    Лимитер темпа и размыкатель цепи живут в памяти процесса. На очереди
+    `maintenance` досбор попадал ко второму воркеру, и источник получал два
+    независимых лимита по 180 обращений в минуту и два размыкателя, каждый из
+    которых ничего не знал о другом.
+    """
+    celery_app = _loaded_celery_app()
+    routes = celery_app.conf.task_routes
+
+    assert routes["tmo.recover_snapshot"]["queue"] == routes["tmo.collect_family"]["queue"]
 
 
 @pytest.mark.parametrize("status", ["SUCCESS", "PARTIAL", "NO_MARKET"])

@@ -79,7 +79,15 @@ celery_app.conf.update(
         "tmo.collect_batch": {"queue": "collect"},
         "tmo.collect_family": {"queue": "collect"},
         "tmo.open_snapshot": {"queue": "collect"},
-        "tmo.recover_snapshot": {"queue": "maintenance"},
+        # Досбор — это сбор, и очередь у него та же. На `maintenance` он попадал
+        # к другому процессу, а лимитер темпа и размыкатель цепи живут в памяти
+        # процесса: источник получал два независимых лимита по 180 обращений в
+        # минуту и два размыкателя, каждый из которых ничего не знал о другом.
+        "tmo.recover_snapshot": {"queue": "collect"},
+        "tmo.close_snapshot": {"queue": "compute"},
+        # Диспетчер обязан оставаться свободным: тот, кто раздаёт работу, не
+        # должен стоять в очереди, которую раздаёт.
+        "tmo.advance_snapshot": {"queue": "maintenance"},
         "tmo.calculate_snapshot": {"queue": "compute"},
         "tmo.recalculate_snapshot": {"queue": "compute"},
         "tmo.finalize_snapshot": {"queue": "compute"},
@@ -87,6 +95,30 @@ celery_app.conf.update(
         "tmo.purge_raw": {"queue": "maintenance"},
         "tmo.daily_quality_digest": {"queue": "maintenance"},
     },
+    # Расписание знает один момент: когда начинаются новые операционные сутки.
+    # Всё остальное решает диспетчер `tmo.advance_snapshot` по состоянию снимка
+    # (`tmo.services.cycle`).
+    #
+    # Прежняя версия раскладывала по часам весь цикл: авиа в 01:00, ЖД в 06:15,
+    # проживание в 06:30, досбор в 08:00, расчёт в 09:00, финализация в 09:30.
+    # Часы выражали намерение и ничего не гарантировали. Затянувшийся сбор авиа
+    # не задерживал следующее семейство, а шёл рядом с ним: воркер держит восемь
+    # потоков, и каждая задача заводила свой пул из двенадцати — источник
+    # получал тридцать шесть. Досбор уходил на второй процесс со своим лимитером
+    # темпа, удваивая разрешённые 180 обращений в минуту. Расчёт стартовал по
+    # часам и считал по данным, которые ещё дописывались.
+    #
+    # Диспетчер выдаёт ровно один шаг и только когда предыдущий отпустил аренду.
+    # Тик — раз в пять минут: цена ошибки диспетчера равна пяти минутам простоя,
+    # а не восьми часам, потерянным до следующей записи расписания.
+    #
+    # Срок публикации к 10:00 снят. Витрина показывает последний полностью
+    # собранный день (`latest_published`), поэтому незакрытый сегодняшний снимок
+    # ей не мешает, а лишние часы сбора закрывают дыры, которых иначе не
+    # закрыть. Рубеж остался один — 23:00 МСК: снимок обязан закрыться внутри
+    # своих календарных суток, иначе семейства разъедутся по разным снимкам.
+    # Границу стережёт `tests/test_cycle.py`.
+    #
     # Порядок семейств задан их стоимостью, а не удобством чтения. Замер ночи
     # 08.08.2026: авиа — 5 страниц и 20,3 с на наблюдение, 8 700 наблюдений;
     # проживание — 3,6 страницы и 7,2 с, 6 540 наблюдений; ЖД — 1 страница и
@@ -109,40 +141,20 @@ celery_app.conf.update(
     # семейства по разным снимкам и потребовал бы вечернего рубежа дат; такой
     # рубеж здесь был при старте в 21:00 и снят вместе с ним.
     beat_schedule={
+        # Единственный час во всём цикле: начало операционных суток. Диспетчер
+        # подхватит открытие снимка и сам, но ждать до 00:35 незачем.
         "open-snapshot": {
             "task": "tmo.open_snapshot",
             "schedule": crontab(hour=0, minute=30),
         },
-        "collect-air": {
-            "task": "tmo.collect_family",
-            "schedule": crontab(hour=1, minute=0),
-            "kwargs": {"family": "AIR"},
-        },
-        "collect-rail": {
-            "task": "tmo.collect_family",
-            "schedule": crontab(hour=6, minute=15),
-            "kwargs": {"family": "RAIL"},
-        },
-        "collect-hotel": {
-            "task": "tmo.collect_family",
-            "schedule": crontab(hour=6, minute=30),
-            "kwargs": {"family": "HOTEL"},
-        },
-        "recover-holes": {
-            "task": "tmo.recover_snapshot",
-            "schedule": crontab(hour=8, minute=0),
-        },
-        "calculate": {
-            "task": "tmo.calculate_snapshot",
-            "schedule": crontab(hour=9, minute=0),
-        },
-        "finalize": {
-            "task": "tmo.finalize_snapshot",
-            "schedule": crontab(hour=9, minute=30),
+        # Двигатель цикла. Всё, что делает система за сутки, выдаётся отсюда.
+        "advance-cycle": {
+            "task": "tmo.advance_snapshot",
+            "schedule": crontab(minute="*/5"),
         },
         "quality-digest": {
             "task": "tmo.daily_quality_digest",
-            "schedule": crontab(hour=10, minute=0),
+            "schedule": crontab(hour=23, minute=30),
         },
         "watch-progress": {
             "task": "tmo.watch_collection_progress",

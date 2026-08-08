@@ -213,7 +213,16 @@ def execute_batch(
     for source_code, source_items in by_source.items():
         source = source_registry().get(source_code)
         connector = get_connector(source_code, replay_mode=replay_mode)
-        workers = max(1, min(source.concurrency, len(source_items)))
+        # Число потоков берётся у регулятора, а не из реестра: реестр задаёт
+        # потолок, а рабочую точку под ним источник подтверждает делом. Днём она
+        # оседает на двух-трёх, ночью возвращается к потолку.
+        governor = TRANSPORT_POOL.governor(
+            source_code,
+            source.concurrency,
+            floor=settings.min_source_concurrency,
+            growth_after=settings.concurrency_growth_after,
+        )
+        workers = max(1, min(governor.current, len(source_items)))
 
         # Цепь уже разомкнута — спрашивать бессмысленно и вредно: она остывает
         # 900 секунд, а пачка исполняется минуты. Прожигание остатка дало бы

@@ -16,8 +16,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from tmo.core.config import get_settings
@@ -47,8 +48,7 @@ class SourceCost:
     calls: float
 
 
-#: Измеренная стоимость наблюдения. Ночь 08.08.2026, снимок 6: средняя задержка
-#: и среднее число обращений успешных попыток.
+#: Измеренная стоимость наблюдения. Ночь 08.08.2026, снимок 6.
 #:
 #: Это не настройка, а результат замера. От него считается размер пачки и по нему
 #: проверяется, укладывается ли ночь в окно. Пачка фиксированного размера для
@@ -56,9 +56,18 @@ class SourceCost:
 #: 40 авианаблюдений при одновременности 3 требуют 271 секунду против бюджета в
 #: 240, и за ночь так потерялось 219 наблюдений.
 #:
+#: Среднее берётся по ``SUCCESS`` **и** ``PARTIAL``. Первая версия этой таблицы
+#: считала только по ``SUCCESS`` и давала для авиа 20,3 с — среднее ста
+#: восьмидесяти наблюдений, собранных за первые пятьдесят две минуты ночи, пока
+#: источник был свеж. Ещё 134 частичных наблюдения той же ночи стоили по 53 с и
+#: в среднее не входили. Пропускная способность пула определяется средним по
+#: всему, что он обслуживает, а не по удачной его части: 34,3 против 20,3
+#: превращают авиа из укладывающейся в окно в не укладывающуюся, и разница эта
+#: была не в источнике, а в способе счёта.
+#:
 #: Пересматривать после каждого изменения рабочей точки или поведения источника.
 OBSERVATION_COST: dict[str, dict[str, SourceCost]] = {
-    "AIR": {"tutu_mcp": SourceCost(seconds=20.3, calls=6.26)},
+    "AIR": {"tutu_mcp": SourceCost(seconds=34.3, calls=6.26)},
     "HOTEL": {"tutu_mcp": SourceCost(seconds=7.2, calls=3.62)},
     "RAIL": {
         "tutu_mcp": SourceCost(seconds=1.0, calls=1.03),
@@ -92,8 +101,14 @@ def seconds_per_observation(family: str | None) -> float:
 
     Возвращает 0 для семейства без замера: досбор идёт по дырам всех семейств
     сразу, и осмысленной средней стоимости у него нет.
+
+    Одновременность берётся **фактическая**, а не из реестра. Регулятор снижает
+    её при отказах источника, и пачка, посчитанная по потолку, при рабочей точке
+    вдвое ниже требует вдвое больше времени, чем ей отведено: её хвост целиком
+    уходит в ``BUDGET_EXHAUSTED``.
     """
     from tmo.catalog.registry import source_registry
+    from tmo.connectors.transport import TRANSPORT_POOL
 
     costs = OBSERVATION_COST.get(str(family or ""))
     if not costs:
@@ -103,7 +118,8 @@ def seconds_per_observation(family: str | None) -> float:
     total = 0.0
     for code, cost in costs.items():
         source = registry.get(code)
-        by_concurrency = cost.seconds / max(1, source.concurrency)
+        concurrency = TRANSPORT_POOL.current_concurrency(code, source.concurrency)
+        by_concurrency = cost.seconds / max(1, concurrency)
         by_rate = (
             cost.calls / (source.rate_limit_per_minute / 60.0)
             if source.rate_limit_per_minute
@@ -164,24 +180,52 @@ def collect_jobs(
     replay_mode: str | None = None,
     soft_budget_seconds: float | None = None,
     family: str | None = None,
+    deadline: datetime | None = None,
+    on_progress: Callable[[], bool] | None = None,
 ) -> dict[str, int]:
     """Прогоняет наблюдения пачками. Каждая пачка — свои три фазы.
+
+    Размер пачки пересчитывается **перед каждой пачкой**, а не один раз на
+    вызов: регулятор одновременности меняет рабочую точку по ходу сбора, и
+    пачка, посчитанная под двенадцать потоков, при осевших до двух не успевает
+    и трети своих наблюдений.
 
     Пачка, целиком пропущенная разомкнутой цепью, останавливает обход до её
     остывания. Без паузы окно семейства расходуется впустую: в ночь
     08.08.2026 сбор авиа прошёл все 218 пачек за шесть секунд, не сделав ни
     одного обращения, и вернул успех. Цепь остывает за пять минут — дешевле
     подождать их один раз, чем потерять восьмичасовое окно.
+
+    ``deadline`` останавливает обход по времени, оставляя несобранное в плане.
+    Это не отказ: наблюдение, до которого не дошли, — дыра, а дыры добираются
+    следующим проходом. Право решать, когда прекратить, принадлежит диспетчеру,
+    и он выражает его этим параметром.
+
+    ``on_progress`` вызывается после каждой пачки и продлевает аренду шага.
+    Вернув ``False``, он останавливает обход: аренда перехвачена, шаг ведёт
+    кто-то другой, и продолжать — значит удваивать нагрузку на источник.
     """
     settings = get_settings()
-    batch_size = batch_size or batch_size_for_family(family, settings=settings)
     totals = {
         "attempts": 0, "offers": 0, "raw": 0, "batches": 0,
-        "budget_exhausted": 0, "circuit_waits": 0, "batch_size": batch_size,
+        "budget_exhausted": 0, "circuit_waits": 0, "batch_size": 0,
+        "deadline_reached": 0, "skipped": 0, "lease_lost": 0,
     }
 
-    for start in range(0, len(job_ids), batch_size):
-        chunk = job_ids[start : start + batch_size]
+    start = 0
+    while start < len(job_ids):
+        if deadline is not None and now_utc() >= deadline:
+            logger.info(
+                "Обход остановлен по дедлайну: остаток остаётся дырами",
+                collected=start,
+                remaining=len(job_ids) - start,
+            )
+            totals["deadline_reached"] = 1
+            break
+
+        size = batch_size or batch_size_for_family(family, settings=settings)
+        chunk = job_ids[start : start + size]
+        totals["batch_size"] = size
         report = run_batch(
             chunk,
             execution_scope=execution_scope,
@@ -194,17 +238,32 @@ def collect_jobs(
         totals["raw"] += report.raw_responses
         totals["batches"] += 1
         totals["budget_exhausted"] += int(report.budget_exhausted)
+        totals["skipped"] += report.skipped_untouched
+        start += len(chunk)
+
+        if on_progress is not None and not on_progress():
+            logger.warning(
+                "Аренда шага потеряна: обход остановлен",
+                collected=start,
+                remaining=len(job_ids) - start,
+            )
+            totals["lease_lost"] = 1
+            break
 
         skipped_whole_batch = report.attempts == 0 and report.skipped_untouched >= len(chunk)
-        has_more = start + batch_size < len(job_ids)
+        has_more = start < len(job_ids)
         if skipped_whole_batch and has_more:
+            wait = settings.circuit_reset_seconds
+            if deadline is not None and now_utc() + timedelta(seconds=wait) >= deadline:
+                totals["deadline_reached"] = 1
+                break
             logger.warning(
                 "Пачка пропущена целиком: пауза до остывания размыкателя",
                 skipped=report.skipped_untouched,
-                wait_seconds=settings.circuit_reset_seconds,
+                wait_seconds=wait,
             )
             totals["circuit_waits"] += 1
-            time.sleep(settings.circuit_reset_seconds)
+            time.sleep(wait)
     return totals
 
 

@@ -115,12 +115,25 @@ def compute_coverage(session: Session, snapshot_id: int) -> CoverageReport:
     return CoverageReport(snapshot_id=snapshot_id, total=total, by_family=by_family)
 
 
-def find_holes(session: Session, snapshot_id: int, *, limit: int | None = None) -> list[int]:
+def find_holes(
+    session: Session,
+    snapshot_id: int,
+    *,
+    limit: int | None = None,
+    max_attempts: int | None = None,
+) -> list[int]:
     """Идентификаторы наблюдений, подлежащих досбору.
 
     Пустой ответ источника сюда не попадает: «предложений нет» — это ответ о
     рынке. Попадает только техническое — включая наблюдения, до которых сбор
     вовсе не дошёл.
+
+    ``max_attempts`` отсекает наблюдения, которые уже пробовали столько раз.
+    Досбор идёт до результата, но «до результата» и «бесконечно» — разные
+    вещи: наблюдение, на котором источник спотыкается систематически, при
+    неограниченном повторе съедает обращения, нужные остальным, и держит
+    снимок открытым до полуночи ради дыры, которая не закроется. Исчерпавшее
+    лимит остаётся дырой в покрытии — честно и видимо.
     """
     query = (
         select(models.CollectionJob.id)
@@ -137,6 +150,8 @@ def find_holes(session: Session, snapshot_id: int, *, limit: int | None = None) 
         )
         .order_by(models.CollectionJob.id)
     )
+    if max_attempts is not None:
+        query = query.where(models.CollectionJob.retry_count < max_attempts)
     if limit:
         query = query.limit(limit)
     return list(session.scalars(query))

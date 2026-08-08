@@ -83,6 +83,12 @@ class BaseConnector(ABC):
                     settings.circuit_failure_threshold,
                     settings.circuit_reset_seconds,
                 ),
+                governor=TRANSPORT_POOL.governor(
+                    self.source.code,
+                    self.source.concurrency,
+                    floor=settings.min_source_concurrency,
+                    growth_after=settings.concurrency_growth_after,
+                ),
                 connect_timeout=settings.connect_timeout_seconds,
                 read_timeout=settings.read_timeout_seconds,
                 max_retries=settings.max_transport_retries,
