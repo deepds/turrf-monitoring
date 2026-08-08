@@ -33,10 +33,18 @@ def snapshot_context(
             "опубликованный снимок."
         ),
     ),
+    attempt_no: int | None = Query(
+        None,
+        description=(
+            "Версия снимка за эту дату (v1, v2, …). За одну дату попыток бывает "
+            "несколько: повторный сбор и импорт со стороннего стенда создают "
+            "новые. Без параметра берётся последняя."
+        ),
+    ),
     session: Session = Depends(db_session),
 ) -> SnapshotContext:
     try:
-        return resolve_context(session, snapshot_date=snapshot_date)
+        return resolve_context(session, snapshot_date=snapshot_date, attempt_no=attempt_no)
     except NoPublishedSnapshot as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

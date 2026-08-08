@@ -32,10 +32,31 @@ def latest(session: Session = Depends(db_session)) -> dict[str, Any]:
     }
 
 
+@router.get("/current", summary="Состояние сбора за текущие сутки")
+def current(session: Session = Depends(db_session)) -> dict[str, Any]:
+    """Что происходит со снимком, который ещё собирается.
+
+    Отдельный эндпоинт, а не поле готового снимка: витрина показывает
+    последний **закрытый** день, и текущие сутки к нему отношения не имеют.
+    Смешивать их в одном ответе значило бы предлагать читателю самому
+    догадываться, к какому из двух снимков относится каждое число.
+
+    ``null`` в ``progress`` означает, что снимок за сегодня ещё не открыт, —
+    это не ошибка, а состояние ночи до 00:30.
+    """
+    from tmo.services import cycle
+
+    return {"progress": cycle.progress(session)}
+
+
 @router.get("/{snapshot_date}", summary="Снимок за конкретную дату")
-def by_date(snapshot_date: date, session: Session = Depends(db_session)) -> dict[str, Any]:
+def by_date(
+    snapshot_date: date,
+    attempt_no: int | None = None,
+    session: Session = Depends(db_session),
+) -> dict[str, Any]:
     try:
-        context = resolve_context(session, snapshot_date=snapshot_date)
+        context = resolve_context(session, snapshot_date=snapshot_date, attempt_no=attempt_no)
     except NoPublishedSnapshot as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {

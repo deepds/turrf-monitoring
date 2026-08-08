@@ -17,10 +17,19 @@ router = APIRouter(prefix="/coverage", tags=["Покрытие и качеств
 
 
 @router.get("/{snapshot_date}", summary="Покрытие снимка за дату")
-def coverage(snapshot_date: date, session: Session = Depends(db_session)) -> dict[str, Any]:
-    snapshot = snapshot_for_date(session, snapshot_date, published_only=False)
+def coverage(
+    snapshot_date: date,
+    attempt_no: int | None = None,
+    session: Session = Depends(db_session),
+) -> dict[str, Any]:
+    snapshot = snapshot_for_date(
+        session, snapshot_date, published_only=False, attempt_no=attempt_no
+    )
     if snapshot is None:
-        raise HTTPException(status_code=404, detail=f"Снимок за {snapshot_date} не найден")
+        detail = f"Снимок за {snapshot_date} не найден"
+        if attempt_no is not None:
+            detail = f"{detail}: нет версии v{attempt_no}"
+        raise HTTPException(status_code=404, detail=detail)
     report = compute_coverage(session, snapshot.id)
     holes = find_holes(session, snapshot.id, limit=200)
     return {

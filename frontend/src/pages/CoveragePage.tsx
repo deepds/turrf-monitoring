@@ -35,6 +35,7 @@ const FAMILY_LABEL: Record<string, string> = {
 
 export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
   const [snapshotDate, setSnapshotDate] = useState<string | undefined>(snapshots[0]?.snapshot_date);
+  const [attemptNo, setAttemptNo] = useState<number | undefined>();
   const [data, setData] = useState<CoverageResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,16 +44,23 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
     if (!snapshotDate && snapshots.length) setSnapshotDate(snapshots[0].snapshot_date);
   }, [snapshots, snapshotDate]);
 
+  // Версии принадлежат дате: при смене даты прежний номер попытки к новой дате
+  // отношения не имеет и мог бы указать на чужой снимок либо в пустоту.
+  const versions = snapshots.find((item) => item.snapshot_date === snapshotDate)?.versions ?? [];
+  useEffect(() => {
+    setAttemptNo(undefined);
+  }, [snapshotDate]);
+
   useEffect(() => {
     if (!snapshotDate) return;
     setLoading(true);
     setError(null);
     api
-      .coverage(snapshotDate)
+      .coverage(snapshotDate, attemptNo)
       .then(setData)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [snapshotDate]);
+  }, [snapshotDate, attemptNo]);
 
   const familyRows: FamilyCoverage[] = data
     ? [...Object.values(data.coverage.by_family), data.coverage.total]
@@ -153,6 +161,20 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
               }`,
             }))}
           />
+          {versions.length > 1 && (
+            <>
+              <Typography.Text type="secondary">Версия</Typography.Text>
+              <Select
+                value={attemptNo ?? versions[0].attempt_no}
+                onChange={setAttemptNo}
+                style={{ minWidth: 200 }}
+                options={versions.map((version) => ({
+                  value: version.attempt_no,
+                  label: `${version.label} · ${version.status} · ${percent(version.coverage_total)}`,
+                }))}
+              />
+            </>
+          )}
         </Space>
       </Card>
 

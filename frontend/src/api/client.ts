@@ -9,6 +9,7 @@ import type {
   AirChartResponse,
   AirGridResponse,
   CoverageResponse,
+  CycleProgress,
   Dictionary,
   HotelChartResponse,
   MetricDetails,
@@ -56,6 +57,9 @@ export const api = {
 
   latestSnapshot: () => request<SnapshotContext & { overview: any }>('/market-snapshots/latest'),
 
+  /** Состояние сбора за текущие сутки. `progress: null` — снимок ещё не открыт. */
+  currentCycle: () => request<{ progress: CycleProgress | null }>('/market-snapshots/current'),
+
   origins: () => request<{ origins: { code: string; name: string }[] }>('/showcase/origins'),
 
   dictionary: () => request<Dictionary>('/reference/dictionary'),
@@ -91,7 +95,8 @@ export const api = {
   metricOffers: (metricId: number, included?: boolean) =>
     request<OffersResponse>(`/metrics/${metricId}/offers`, { included }),
 
-  coverage: (snapshotDate: string) => request<CoverageResponse>(`/coverage/${snapshotDate}`),
+  coverage: (snapshotDate: string, attemptNo?: number) =>
+    request<CoverageResponse>(`/coverage/${snapshotDate}`, { attempt_no: attemptNo }),
 
   exportUrl: (metricId: number, fmt: 'csv' | 'xlsx') =>
     `${BASE}/exports/metrics/${metricId}?fmt=${fmt}`,

@@ -27,6 +27,9 @@ class SnapshotContext:
 
     snapshot: models.MarketSnapshot
     run: models.CalculationRun
+    #: Состояние снимка за текущие сутки, если он ещё не закрыт. Витрина
+    #: показывает не его, а последний готовый, — но обязана сказать, почему.
+    today: dict[str, Any] | None = None
 
     @property
     def is_fallback(self) -> bool:
@@ -35,12 +38,33 @@ class SnapshotContext:
 
         return self.snapshot.snapshot_date != snapshot_date_for()
 
+    @property
+    def fallback_reason(self) -> str | None:
+        """Почему показан не сегодняшний снимок.
+
+        Различение появилось вместе с моделью сбора по готовности. Прежний текст
+        «не опубликован либо не прошёл ворота» был верен, пока цикл заканчивался
+        к 10:00: к моменту, когда на витрину смотрели, всё было решено. Теперь
+        незакрытый снимок — нормальное состояние двадцати двух часов в сутки, и
+        читать его как провал значит пугать пользователя штатной работой.
+        """
+        if not self.is_fallback:
+            return None
+        if self.today is None:
+            return "NOT_STARTED"
+        if not self.today.get("is_closed"):
+            return "IN_PROGRESS"
+        return "FAILED"
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "snapshot_id": self.snapshot.id,
             "snapshot_date": self.snapshot.snapshot_date.isoformat(),
             "status": str(self.snapshot.status),
             "attempt_no": self.snapshot.attempt_no,
+            "version_label": f"v{self.snapshot.attempt_no}",
+            "fallback_reason": self.fallback_reason,
+            "today": self.today,
             "is_synthetic": bool(self.snapshot.is_synthetic),
             "is_fallback": self.is_fallback,
             "published_at": self.snapshot.published_at.isoformat()
@@ -64,15 +88,23 @@ def resolve_context(
     session: Session,
     *,
     snapshot_date: date | None = None,
+    attempt_no: int | None = None,
     allow_synthetic: bool = True,
 ) -> SnapshotContext:
     """Находит снимок и его активный расчёт.
 
-    Если сегодняшний прогон провалился, берётся последний пригодный. Его дата
-    и статус возвращаются вместе с данными: подменить их сегодняшними нельзя.
+    Витрина показывает **последний полностью собранный** день. Сегодняшний
+    снимок, пока он собирается, сюда не попадает и попасть не должен: показать
+    вчерашние данные — нормально, показать сегодняшние недособранные как
+    готовые — нет.
+
+    ``attempt_no`` выбирает версию среди попыток одной даты. Без него берётся
+    последняя.
     """
+    from tmo.services import cycle
+
     if snapshot_date is not None:
-        snapshot = snapshot_for_date(session, snapshot_date)
+        snapshot = snapshot_for_date(session, snapshot_date, attempt_no=attempt_no)
     else:
         snapshot = latest_published(session)
         if snapshot is None and allow_synthetic:
@@ -84,7 +116,7 @@ def resolve_context(
     run = active_run(session, snapshot.id)
     if run is None:
         raise NoPublishedSnapshot(f"У снимка {snapshot.snapshot_date} нет активного расчёта")
-    return SnapshotContext(snapshot=snapshot, run=run)
+    return SnapshotContext(snapshot=snapshot, run=run, today=cycle.progress(session))
 
 
 # --------------------------------------------------------------------------- #

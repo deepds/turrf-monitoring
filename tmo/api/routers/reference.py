@@ -17,9 +17,10 @@ from tmo.catalog.registry import (
 )
 from tmo.core.config import get_settings
 from tmo.core.enums import ExclusionReason, WarningCode
-from tmo.core.timeutil import HORIZON_DAYS, now_msk, sla_deadline, snapshot_date_for
+from tmo.core.timeutil import HORIZON_DAYS, now_msk, snapshot_date_for
 from tmo.db import models
 from tmo.planner.matrix import STAR_CATEGORIES, expected_size
+from tmo.services import cycle
 from tmo.version import APP_VERSION
 
 router = APIRouter(tags=["Справочники"])
@@ -42,7 +43,12 @@ def health(session: Session = Depends(db_session)) -> dict[str, Any]:
         "version": APP_VERSION,
         "database": "ok" if database_ok else "unavailable",
         "now_msk": now_msk().isoformat(),
-        "sla_deadline": sla_deadline(snapshot_date_for()).isoformat(),
+        # Рубеж суток, а не срок публикации к 10:00. Срок снят вместе с моделью,
+        # в которой цикл раскладывался по часам: витрина показывает последний
+        # полностью собранный день, поэтому сбор идёт до готовности. Оставить
+        # здесь 10:00 значило бы отдавать наружу время, к которому система
+        # больше ничего не обещает.
+        "day_deadline": cycle.day_deadline(snapshot_date_for()).isoformat(),
         "latest_snapshot": {
             "snapshot_date": latest.snapshot_date.isoformat(),
             "status": str(latest.status),

@@ -239,6 +239,90 @@ def test_cycle_closes_inside_its_own_calendar_day() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Витрина под новую модель
+# --------------------------------------------------------------------------- #
+
+
+def test_progress_tells_collection_apart_from_failure(session) -> None:
+    """«Идёт сбор» и «провалилось» обязаны различаться в ответе API.
+
+    Пока цикл шёл по часам и заканчивался к 10:00, разницы не требовалось: к
+    моменту, когда на витрину смотрели, всё было решено. Теперь незакрытый
+    снимок — нормальное состояние двадцати двух часов в сутки, и читать его как
+    провал значит пугать пользователя штатной работой.
+    """
+    snapshot = _snapshot(session, status=SnapshotStatus.COLLECTING)
+    _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
+    _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)
+
+    state = cycle.progress(session, DAY)
+    assert state is not None
+    assert state["is_closed"] is False
+    assert state["step"] == cycle.STEP_RECOVER
+    assert state["answered"]["AIR"] == 0.5
+    assert state["holes"] == 1
+
+    snapshot.status = SnapshotStatus.FAILED
+    session.flush()
+    assert cycle.progress(session, DAY)["is_closed"] is True
+
+
+def test_progress_is_absent_before_the_day_opens(session) -> None:
+    """Снимка за сегодня ещё нет — это состояние ночи до 00:30, а не ошибка."""
+    assert cycle.progress(session, DAY) is None
+
+
+def test_versions_of_one_date_are_listed_separately(session) -> None:
+    """Попытки одной даты обязаны быть различимы в витрине.
+
+    За одной датой может стоять и собранный здесь снимок, и импортированный со
+    стороннего стенда. Прежний список отдавал одну строку на дату, и выбрать
+    между ними было нельзя — показывалась молча последняя.
+    """
+    from tmo.core.timeutil import now_utc
+    from tmo.services.snapshot import available_snapshot_dates
+
+    for attempt in (1, 2):
+        session.add(
+            models.MarketSnapshot(
+                snapshot_date=DAY,
+                attempt_no=attempt,
+                status=SnapshotStatus.READY,
+                horizon_days=30,
+                coverage_total=0.9 + attempt / 100,
+                created_at=now_utc(),
+            )
+        )
+    session.flush()
+
+    listed = available_snapshot_dates(session)
+    assert len(listed) == 1, "дата обязана быть одной строкой"
+    assert [v["label"] for v in listed[0]["versions"]] == ["v2", "v1"]
+    assert listed[0]["attempt_no"] == 2, "по умолчанию — последняя попытка"
+
+
+def test_version_can_be_selected_explicitly(session) -> None:
+    from tmo.core.timeutil import now_utc
+    from tmo.services.snapshot import snapshot_for_date
+
+    for attempt in (1, 2):
+        session.add(
+            models.MarketSnapshot(
+                snapshot_date=DAY,
+                attempt_no=attempt,
+                status=SnapshotStatus.READY,
+                horizon_days=30,
+                created_at=now_utc(),
+            )
+        )
+    session.flush()
+
+    assert snapshot_for_date(session, DAY).attempt_no == 2
+    assert snapshot_for_date(session, DAY, attempt_no=1).attempt_no == 1
+    assert snapshot_for_date(session, DAY, attempt_no=7) is None
+
+
+# --------------------------------------------------------------------------- #
 # Регулятор одновременности
 # --------------------------------------------------------------------------- #
 

@@ -308,11 +308,24 @@ def latest_any(session: Session, *, include_synthetic: bool = True) -> models.Ma
 
 
 def snapshot_for_date(
-    session: Session, snapshot_date: date, *, published_only: bool = True
+    session: Session,
+    snapshot_date: date,
+    *,
+    published_only: bool = True,
+    attempt_no: int | None = None,
 ) -> models.MarketSnapshot | None:
+    """Снимок за дату. Без ``attempt_no`` — последняя попытка.
+
+    Попыток за одну дату бывает несколько: повторный сбор создаёт новый снимок,
+    а не переписывает старый, и то же делает импорт снимка с другого стенда.
+    Выбирать между ними обязан пользователь, а не запрос по умолчанию, — иначе
+    импортированная попытка молча подменяет собранную здесь и наоборот.
+    """
     query = select(models.MarketSnapshot).where(
         models.MarketSnapshot.snapshot_date == snapshot_date
     )
+    if attempt_no is not None:
+        query = query.where(models.MarketSnapshot.attempt_no == attempt_no)
     if published_only:
         query = query.where(
             models.MarketSnapshot.status.in_(
@@ -325,10 +338,20 @@ def snapshot_for_date(
 
 
 def available_snapshot_dates(session: Session, *, limit: int = 60) -> list[dict[str, Any]]:
-    """Даты наблюдения, доступные для исторических графиков."""
+    """Даты наблюдения, доступные для исторических графиков.
+
+    У даты может быть несколько попыток, и они перечисляются: повторный сбор и
+    импорт снимка со стороннего стенда создают новые попытки той же даты.
+    Прежняя версия отдавала одну строку на снимок и не различала их вовсе —
+    выбрать «ту, что собрана здесь» из витрины было нельзя.
+
+    Порядок внутри даты — по убыванию попытки: последняя первой. Она же
+    подставляется, когда попытка не указана явно.
+    """
     rows = session.execute(
         select(
             models.MarketSnapshot.snapshot_date,
+            models.MarketSnapshot.attempt_no,
             models.MarketSnapshot.status,
             models.MarketSnapshot.is_synthetic,
             models.MarketSnapshot.coverage_total,
@@ -339,16 +362,26 @@ def available_snapshot_dates(session: Session, *, limit: int = 60) -> list[dict[
                 [SnapshotStatus.READY.value, SnapshotStatus.DEGRADED.value]
             )
         )
-        .order_by(models.MarketSnapshot.snapshot_date.desc())
+        .order_by(
+            models.MarketSnapshot.snapshot_date.desc(),
+            models.MarketSnapshot.attempt_no.desc(),
+        )
         .limit(limit)
     ).all()
-    return [
-        {
-            "snapshot_date": row.snapshot_date.isoformat(),
+
+    by_date: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = row.snapshot_date.isoformat()
+        version = {
+            "attempt_no": row.attempt_no,
+            "label": f"v{row.attempt_no}",
             "status": row.status,
             "is_synthetic": bool(row.is_synthetic),
             "coverage_total": round(float(row.coverage_total), 4),
             "published_at": row.published_at.isoformat() if row.published_at else None,
         }
-        for row in rows
-    ]
+        if key not in by_date:
+            by_date[key] = {"snapshot_date": key, **version, "versions": [version]}
+        else:
+            by_date[key]["versions"].append(version)
+    return list(by_date.values())

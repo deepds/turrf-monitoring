@@ -288,3 +288,46 @@ def next_step(
 
 def time_until_deadline(snapshot_date: date, *, now: datetime | None = None) -> timedelta:
     return day_deadline(snapshot_date) - (now or now_utc())
+
+
+def progress(
+    session: Session, snapshot_date: date | None = None, *, now: datetime | None = None
+) -> dict[str, Any] | None:
+    """Что происходит со снимком за текущие сутки. ``None``, если его нет.
+
+    Нужно витрине, и именно из-за новой модели. Пока цикл шёл по часам и
+    заканчивался к 10:00, вопрос «что там сейчас» не возникал: к моменту, когда
+    на витрину смотрели, всё было либо опубликовано, либо провалено. Теперь
+    незакрытый снимок — нормальное состояние двадцати двух часов в сутки, и
+    отличать «идёт сбор» от «провалилось» обязана витрина, а не журнал воркера.
+    """
+    now = now or now_utc()
+    snapshot_date = snapshot_date or now.astimezone(MSK).date()
+
+    snapshot = session.scalars(
+        select(models.MarketSnapshot)
+        .where(models.MarketSnapshot.snapshot_date == snapshot_date)
+        .order_by(models.MarketSnapshot.attempt_no.desc())
+        .limit(1)
+    ).first()
+    if snapshot is None:
+        return None
+
+    shares = answered_share(session, snapshot.id)
+    step = next_step(session, snapshot_date, now=now)
+    deadline = day_deadline(snapshot_date)
+
+    return {
+        "snapshot_id": snapshot.id,
+        "snapshot_date": snapshot_date.isoformat(),
+        "attempt_no": snapshot.attempt_no,
+        "status": str(snapshot.status),
+        "is_closed": SnapshotStatus(snapshot.status).is_terminal,
+        "step": step.step,
+        "step_reason": step.reason,
+        "step_family": step.family,
+        "answered": {key: round(value, 4) for key, value in shares.items()},
+        "holes": _holes_count(session, snapshot.id),
+        "deadline": deadline.isoformat(),
+        "minutes_left": max(0, int((deadline - now).total_seconds() // 60)),
+    }

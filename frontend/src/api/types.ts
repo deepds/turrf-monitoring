@@ -14,8 +14,19 @@ export interface SnapshotContext {
   snapshot_date: string;
   status: string;
   attempt_no: number;
+  /** Ярлык версии: v1, v2, … */
+  version_label: string;
   is_synthetic: boolean;
   is_fallback: boolean;
+  /**
+   * Почему показан не сегодняшний снимок.
+   *
+   * `IN_PROGRESS` — сегодня ещё собирается, и это штатное состояние: сбор идёт
+   * до готовности, а не до срока. `FAILED` — сегодняшний закрыт и не прошёл
+   * ворота. `NOT_STARTED` — снимок за сегодня ещё не открыт.
+   */
+  fallback_reason: 'IN_PROGRESS' | 'FAILED' | 'NOT_STARTED' | null;
+  today: CycleProgress | null;
   published_at: string | null;
   coverage_total: number;
   coverage_rail: number;
@@ -273,12 +284,42 @@ export interface Dictionary {
   expected_matrix: Record<string, number>;
 }
 
-export interface SnapshotListItem {
-  snapshot_date: string;
+export interface SnapshotVersion {
+  attempt_no: number;
+  /** Ярлык версии для показа: v1, v2, … */
+  label: string;
   status: string;
   is_synthetic: boolean;
   coverage_total: number;
   published_at: string | null;
+}
+
+/**
+ * Дата наблюдения и её версии.
+ *
+ * Поля версии продублированы на верхнем уровне — это последняя попытка даты.
+ * Так старые экраны, не знающие о версиях, продолжают работать без правок.
+ */
+export interface SnapshotListItem extends SnapshotVersion {
+  snapshot_date: string;
+  versions: SnapshotVersion[];
+}
+
+/** Состояние сбора за текущие сутки. */
+export interface CycleProgress {
+  snapshot_id: number;
+  snapshot_date: string;
+  attempt_no: number;
+  status: string;
+  is_closed: boolean;
+  step: 'OPEN' | 'COLLECT' | 'RECOVER' | 'CLOSE' | 'IDLE';
+  step_reason: string;
+  step_family: string | null;
+  /** Доля наблюдений, получивших ответ, по семействам и TOTAL. */
+  answered: Record<string, number>;
+  holes: number;
+  deadline: string;
+  minutes_left: number;
 }
 
 export interface FamilyCoverage {
