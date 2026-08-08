@@ -86,7 +86,61 @@ def _offset(snapshot_date: date, value: date) -> int:
     return (value - snapshot_date).days
 
 
-def _rail_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[PlannedJob]:
+@dataclass(frozen=True, slots=True)
+class Scope:
+    """Область наблюдения: откуда едем и где ночуем.
+
+    Два множества, а не одно, потому что у транспорта и проживания ограничение
+    разворачивается в разные стороны. При поездках из Москвы транспорт
+    наблюдается только из Москвы, а гостиницы — везде, кроме Москвы: ночуют в
+    городе назначения.
+
+    Пустая область (``origins=None``) означает полную матрицу и не ограничивает
+    ничего — это обычный боевой прогон.
+    """
+
+    origins: frozenset[str] = frozenset()
+    stay_cities: frozenset[str] = frozenset()
+
+    @classmethod
+    def of(cls, registry: CityRegistry, origins: tuple[str, ...] | None) -> Scope:
+        if not origins:
+            return cls()
+        known = {city.code for city in registry.ordered}
+        unknown = sorted(set(origins) - known)
+        if unknown:
+            raise ValueError(f"Города нет в справочнике: {', '.join(unknown)}")
+        chosen = frozenset(origins)
+        return cls(
+            origins=chosen,
+            # Города назначения: всё, куда можно уехать хотя бы из одного
+            # выбранного города отправления.
+            stay_cities=frozenset(code for code in known if {code} != chosen),
+        )
+
+    @property
+    def is_restricted(self) -> bool:
+        return bool(self.origins)
+
+    def allows_route(self, origin_code: str) -> bool:
+        return not self.origins or origin_code in self.origins
+
+    def allows_stay(self, city_code: str) -> bool:
+        return not self.origins or city_code in self.stay_cities
+
+    def as_dict(self) -> dict[str, Any]:
+        """Область в виде, пригодном для записи в снимок и чтения человеком."""
+        if not self.is_restricted:
+            return {}
+        return {
+            "origins": sorted(self.origins),
+            "stay_cities": sorted(self.stay_cities),
+        }
+
+
+def _rail_jobs(
+    snapshot_date: date, registry: CityRegistry, days: int, scope: Scope
+) -> list[PlannedJob]:
     """Плечо в одну сторону на каждую служебную дату горизонта.
 
     Плечо, а не поездка: перевозчик продаёт билет в одну сторону, и наблюдать
@@ -95,6 +149,8 @@ def _rail_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[P
     """
     jobs: list[PlannedJob] = []
     for origin, destination in registry.directed_pairs():
+        if not scope.allows_route(origin.code):
+            continue
         for service_date in horizon_dates(snapshot_date, days=days):
             params = {
                 "origin": origin.code,
@@ -122,7 +178,9 @@ def _rail_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[P
     return jobs
 
 
-def _air_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[PlannedJob]:
+def _air_jobs(
+    snapshot_date: date, registry: CityRegistry, days: int, scope: Scope
+) -> list[PlannedJob]:
     """Настоящий круговой тариф на каждую пару дат внутри горизонта.
 
     Кругового тарифа «на произвольный интервал» не существует: он продаётся на
@@ -130,6 +188,8 @@ def _air_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[Pl
     """
     jobs: list[PlannedJob] = []
     for origin, destination in registry.directed_pairs():
+        if not scope.allows_route(origin.code):
+            continue
         for departure, return_date in date_pairs(snapshot_date, days=days):
             params = {
                 "origin": origin.code,
@@ -165,7 +225,9 @@ def _air_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[Pl
     return jobs
 
 
-def _hotel_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[PlannedJob]:
+def _hotel_jobs(
+    snapshot_date: date, registry: CityRegistry, days: int, scope: Scope
+) -> list[PlannedJob]:
     """Настоящая бронь на пару дат, включая хвостовую точку графика.
 
     Одна ночь — частный случай пары ``(d, d+1)``. Отдельно достраивается только
@@ -178,6 +240,8 @@ def _hotel_jobs(snapshot_date: date, registry: CityRegistry, days: int) -> list[
     stays.append((horizon_end, horizon_end + timedelta(days=1)))
 
     for city in registry.ordered:
+        if not scope.allows_stay(city.code):
+            continue
         for stars in STAR_CATEGORIES:
             for check_in, check_out in stays:
                 params = {
@@ -219,16 +283,28 @@ def build_matrix(
     horizon_days: int = HORIZON_DAYS,
     registry: CityRegistry | None = None,
     families: tuple[CollectionFamily, ...] = tuple(CollectionFamily),
+    origins: tuple[str, ...] | None = None,
 ) -> CollectionMatrix:
-    """Строит полную матрицу наблюдений для даты снимка."""
+    """Строит матрицу наблюдений для даты снимка.
+
+    ``origins`` ограничивает матрицу поездками из перечисленных городов. Нужно
+    нагрузочному прогону: полная матрица занимает у источника одиннадцать часов,
+    и проверять на ней работу конвейера дорого.
+
+    Ограничение задаётся поездками, а не городами, и по семействам разворачивается
+    по-разному: транспорт наблюдается **из** указанных городов, проживание — **в**
+    городах назначения. В поездке Москва→Сочи гостиница нужна в Сочи, поэтому при
+    ``origins=("MOW",)`` московские гостиницы в матрицу не входят.
+    """
     registry = registry or city_registry()
+    scope = Scope.of(registry, origins)
     matrix = CollectionMatrix(snapshot_date=snapshot_date, horizon_days=horizon_days)
     if CollectionFamily.RAIL in families:
-        matrix.jobs.extend(_rail_jobs(snapshot_date, registry, horizon_days))
+        matrix.jobs.extend(_rail_jobs(snapshot_date, registry, horizon_days, scope))
     if CollectionFamily.AIR in families:
-        matrix.jobs.extend(_air_jobs(snapshot_date, registry, horizon_days))
+        matrix.jobs.extend(_air_jobs(snapshot_date, registry, horizon_days, scope))
     if CollectionFamily.HOTEL in families:
-        matrix.jobs.extend(_hotel_jobs(snapshot_date, registry, horizon_days))
+        matrix.jobs.extend(_hotel_jobs(snapshot_date, registry, horizon_days, scope))
 
     keys = [job.job_key for job in matrix.jobs]
     if len(keys) != len(set(keys)):
@@ -239,13 +315,27 @@ def build_matrix(
     return matrix
 
 
-def expected_size(horizon_days: int = HORIZON_DAYS, city_count: int = 5) -> dict[str, int]:
-    """Ожидаемый размер матрицы. Используется тестами и capacity-анализом."""
-    routes = city_count * (city_count - 1)
+def expected_size(
+    horizon_days: int = HORIZON_DAYS,
+    city_count: int = 5,
+    origin_count: int | None = None,
+) -> dict[str, int]:
+    """Ожидаемый размер матрицы. Используется тестами и capacity-анализом.
+
+    ``origin_count`` — сколько городов отправления наблюдается. ``None`` означает
+    все, то есть полную матрицу. Один город даёт 7 092 наблюдения против 15 840:
+    транспорт сжимается вчетверо по числу маршрутов, проживание — на один город,
+    потому что в городе отправления не ночуют.
+    """
+    origin_count = city_count if origin_count is None else origin_count
+    routes = origin_count * (city_count - 1)
     pairs = horizon_days * (horizon_days - 1) // 2
+    # Город отправления выпадает из проживания только когда он один: при двух и
+    # более из каждого можно уехать в другой, и ночуют в итоге во всех.
+    stay_cities = city_count - 1 if origin_count == 1 else city_count
     rail = routes * horizon_days
     air = routes * pairs
-    hotel = city_count * len(STAR_CATEGORIES) * (pairs + 1)
+    hotel = stay_cities * len(STAR_CATEGORIES) * (pairs + 1)
     return {
         "RAIL": rail,
         "AIR": air,

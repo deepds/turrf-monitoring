@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Any
@@ -40,17 +41,36 @@ class BaseConnector(ABC):
         self.settings = settings or get_settings()
         self.log = get_logger(f"tmo.connectors.{source.code}").bind(source=source.code)
         self._transport: SourceTransport | None = None
+        self._transport_lock = threading.Lock()
 
     # -- транспорт -----------------------------------------------------------
 
     def transport(self) -> SourceTransport:
-        """Клиент источника, общий на процесс.
+        """Клиент источника, общий на процесс. Создание — под блокировкой.
 
         Переиспользуется между наблюдениями: установка TLS-соединения к
         MCP-серверу стоит дороже самого запроса, а лимитер и размыкатель обязаны
         быть общими — иначе два потока дадут вдвое больший фактический темп.
+
+        Без блокировки потоки пачки одновременно видят ``None`` и создают каждый
+        свой клиент. Побеждает последний записавший, а остальные продолжают
+        работать через собственные объекты: у наблюдения счётчик обращений
+        считается на одном клиенте, а запросы уходят через другой, и в базу
+        попадает ноль. Лимит темпа при этом уцелел — он живёт в общем
+        ``TRANSPORT_POOL``, — но соединений открывается вшестеро больше, чем
+        задумано.
+
+        Ровно эта гонка однажды была устранена в ``TutuConnector.mcp()``.
+        Здесь, уровнем ниже, она осталась и проявилась только на живом
+        многопоточном прогоне 08.08.2026.
         """
-        if self._transport is None:
+        if self._transport is not None:
+            return self._transport
+        with self._transport_lock:
+            # Проверка повторяется внутри блокировки: пока поток ждал, клиента
+            # мог создать кто-то другой.
+            if self._transport is not None:
+                return self._transport
             settings = self.settings
             self._transport = SourceTransport(
                 source_code=self.source.code,

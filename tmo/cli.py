@@ -17,7 +17,7 @@ from typing import Any
 from tmo.core.config import get_settings
 from tmo.core.enums import CollectionFamily
 from tmo.core.logging import configure_logging
-from tmo.core.timeutil import operational_date_for
+from tmo.core.timeutil import snapshot_date_for
 
 
 def _print(payload: Any) -> None:
@@ -35,10 +35,21 @@ def _parse_date(value: str | None) -> date | None:
     завести второй за вчерашнюю дату.
     """
     if value in (None, "today"):
-        return operational_date_for() if value == "today" else None
+        return snapshot_date_for() if value == "today" else None
     if value == "yesterday":
-        return operational_date_for() - timedelta(days=1)
+        return snapshot_date_for() - timedelta(days=1)
     return date.fromisoformat(value)
+
+
+def _origins(value: str | None) -> tuple[str, ...] | None:
+    """Города отправления для ограниченного прогона.
+
+    Пусто означает полную матрицу. Ограниченный прогон нужен, чтобы проверить
+    конвейер целиком, не занимая источник на одиннадцать часов.
+    """
+    if not value or value == "all":
+        return None
+    return tuple(item.strip().upper() for item in value.split(",") if item.strip())
 
 
 def _families(value: str | None) -> tuple[CollectionFamily, ...]:
@@ -66,12 +77,19 @@ def cmd_init_db(args: argparse.Namespace) -> int:
 def cmd_plan(args: argparse.Namespace) -> int:
     from tmo.planner.matrix import build_matrix, expected_size
 
-    target = _parse_date(args.snapshot_date) or operational_date_for()
-    matrix = build_matrix(target, horizon_days=args.horizon, families=_families(args.families))
+    target = _parse_date(args.snapshot_date) or snapshot_date_for()
+    origins = _origins(getattr(args, "origins", None))
+    matrix = build_matrix(
+        target,
+        horizon_days=args.horizon,
+        families=_families(args.families),
+        origins=origins,
+    )
     _print(
         {
             "snapshot_date": target.isoformat(),
             "horizon_days": args.horizon,
+            "origins": list(origins) if origins else "all",
             "planned": len(matrix),
             "by_family": matrix.counts_by_family(),
             "plan_digest": matrix.digest,
@@ -93,6 +111,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
         recovery_rounds=args.recovery_rounds,
         batch_size=args.batch_size,
         soft_budget_seconds=args.soft_budget,
+        origins=_origins(getattr(args, "origins", None)),
     )
     _print(report)
     return 0 if report.status != "FAILED" else 2
@@ -125,7 +144,7 @@ def cmd_recalculate(args: argparse.Namespace) -> int:
     from tmo.db.session import session_scope
     from tmo.services.pipeline import recalculate
 
-    target = _parse_date(args.snapshot_date) or operational_date_for()
+    target = _parse_date(args.snapshot_date) or snapshot_date_for()
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)
@@ -147,7 +166,7 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     from tmo.db.session import session_scope
     from tmo.services.coverage import compute_coverage
 
-    target = _parse_date(args.snapshot_date) or operational_date_for()
+    target = _parse_date(args.snapshot_date) or snapshot_date_for()
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)
@@ -213,12 +232,25 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--snapshot-date", default="today")
     plan.add_argument("--horizon", type=int, default=30)
     plan.add_argument("--families", default="all")
+    plan.add_argument(
+        "--origins",
+        default="all",
+        help="Города отправления через запятую, например MOW. По умолчанию все",
+    )
     plan.set_defaults(func=cmd_plan)
 
     collect = sub.add_parser("collect", help="Полный суточный цикл")
     collect.add_argument("--snapshot-date", default="today")
     collect.add_argument("--horizon", type=int, default=30)
     collect.add_argument("--families", default="all")
+    collect.add_argument(
+        "--origins",
+        default="all",
+        help=(
+            "Города отправления через запятую, например MOW. Ограниченный прогон "
+            "на витрину не попадает"
+        ),
+    )
     collect.add_argument("--replay", default=None, choices=["SIMULATED", "RECORDED"])
     collect.add_argument("--recovery-rounds", type=int, default=2)
     collect.add_argument("--batch-size", type=int, default=None)

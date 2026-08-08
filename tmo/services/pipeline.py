@@ -34,22 +34,36 @@ from tmo.services.snapshot import create_snapshot
 
 logger = get_logger(__name__)
 
-#: Измеренная стоимость одного наблюдения по семейству и источнику, секунды.
-#: Ночь 08.08.2026, средняя задержка успешных попыток снимка 6.
+@dataclass(frozen=True, slots=True)
+class SourceCost:
+    """Во что обходится одно наблюдение у одного источника.
+
+    Две величины, а не одна, потому что ограничителей тоже два: задержка
+    упирается в одновременность, число обращений — в лимит темпа. Какой из них
+    сработает, зависит от настроек, и считать надо по худшему.
+    """
+
+    seconds: float
+    calls: float
+
+
+#: Измеренная стоимость наблюдения. Ночь 08.08.2026, снимок 6: средняя задержка
+#: и среднее число обращений успешных попыток.
 #:
-#: Это не настройка, а результат замера: он задаёт размер пачки так, чтобы она
-#: укладывалась в свой бюджет. Пачка фиксированного размера для семейств,
-#: различающихся в двадцать раз, гарантированно рвётся на дорогом: 40 авианаблюдений
-#: при одновременности 3 требуют 271 секунду против бюджета в 240, и каждая пачка
-#: закрывалась `BUDGET_EXHAUSTED`, не дойдя до трети своих наблюдений. За ночь так
-#: потерялось 219 наблюдений — не из-за источника, а из-за несогласованности
-#: двух констант.
+#: Это не настройка, а результат замера. От него считается размер пачки и по нему
+#: проверяется, укладывается ли ночь в окно. Пачка фиксированного размера для
+#: семейств, различающихся в двадцать раз, гарантированно рвётся на дорогом:
+#: 40 авианаблюдений при одновременности 3 требуют 271 секунду против бюджета в
+#: 240, и за ночь так потерялось 219 наблюдений.
 #:
-#: Пересматривать после каждого изменения одновременности или поведения источника.
-OBSERVATION_COST_SECONDS: dict[str, dict[str, float]] = {
-    "AIR": {"tutu_mcp": 20.3},
-    "HOTEL": {"tutu_mcp": 7.2},
-    "RAIL": {"tutu_mcp": 1.0, "rzd": 1.5},
+#: Пересматривать после каждого изменения рабочей точки или поведения источника.
+OBSERVATION_COST: dict[str, dict[str, SourceCost]] = {
+    "AIR": {"tutu_mcp": SourceCost(seconds=20.3, calls=6.26)},
+    "HOTEL": {"tutu_mcp": SourceCost(seconds=7.2, calls=3.62)},
+    "RAIL": {
+        "tutu_mcp": SourceCost(seconds=1.0, calls=1.03),
+        "rzd": SourceCost(seconds=1.5, calls=1.00),
+    },
 }
 
 #: Какую долю бюджета пачке позволено занять по расчёту. Остаток — на разброс
@@ -62,31 +76,52 @@ MIN_BATCH_SIZE = 20
 MAX_BATCH_SIZE = 400
 
 
-def batch_size_for_family(family: str | None, *, settings: Any = None) -> int:
-    """Сколько наблюдений семейства укладывается в бюджет одной пачки.
+def seconds_per_observation(family: str | None) -> float:
+    """Ожидаемое время одного наблюдения семейства при текущей рабочей точке.
 
-    Источники внутри пачки обходятся последовательно, поэтому стоимость
-    наблюдения — это сумма по источникам, каждый со своей одновременностью.
+    Источники внутри пачки обходятся последовательно (`runner.execute_batch`),
+    поэтому стоимость — сумма по источникам. У каждого берётся **худший из двух
+    ограничителей**: задержка, делённая на одновременность, и число обращений,
+    делённое на разрешённый темп.
+
+    Учитывать оба обязательно. При одновременности 6 связывает задержка, при 12
+    — уже лимит темпа: авиа просит около 215 обращений в минуту при разрешённых
+    180, а проживание упирается в лимит уже на семи потоках. Расчёт по одной
+    лишь одновременности показал бы, что ночь укладывается в окно, тогда как на
+    деле не укладывается.
+
+    Возвращает 0 для семейства без замера: досбор идёт по дырам всех семейств
+    сразу, и осмысленной средней стоимости у него нет.
     """
     from tmo.catalog.registry import source_registry
 
-    settings = settings or get_settings()
-    costs = OBSERVATION_COST_SECONDS.get(str(family or ""))
+    costs = OBSERVATION_COST.get(str(family or ""))
     if not costs:
-        # Досбор идёт по дырам всех семейств сразу, стоимость смешанная —
-        # остаётся настроенный размер.
-        return settings.batch_size
+        return 0.0
 
     registry = source_registry()
-    seconds_per_job = 0.0
-    for source_code, cost in costs.items():
-        concurrency = max(1, registry.get(source_code).concurrency)
-        seconds_per_job += cost / concurrency
-    if seconds_per_job <= 0:
+    total = 0.0
+    for code, cost in costs.items():
+        source = registry.get(code)
+        by_concurrency = cost.seconds / max(1, source.concurrency)
+        by_rate = (
+            cost.calls / (source.rate_limit_per_minute / 60.0)
+            if source.rate_limit_per_minute
+            else 0.0
+        )
+        total += max(by_concurrency, by_rate)
+    return total
+
+
+def batch_size_for_family(family: str | None, *, settings: Any = None) -> int:
+    """Сколько наблюдений семейства укладывается в бюджет одной пачки."""
+    settings = settings or get_settings()
+    seconds = seconds_per_observation(family)
+    if seconds <= 0:
         return settings.batch_size
 
     budget = settings.batch_soft_budget_seconds * BATCH_BUDGET_FILL
-    return max(MIN_BATCH_SIZE, min(MAX_BATCH_SIZE, int(budget / seconds_per_job)))
+    return max(MIN_BATCH_SIZE, min(MAX_BATCH_SIZE, int(budget / seconds)))
 
 
 @dataclass(slots=True)
@@ -185,8 +220,14 @@ def run_daily_pipeline(
     soft_budget_seconds: float | None = None,
     profile_version: str | None = None,
     golden_result: dict[str, Any] | None = None,
+    origins: tuple[str, ...] | None = None,
 ) -> PipelineReport:
-    """Полный суточный цикл от плана до опубликованного снимка."""
+    """Полный суточный цикл от плана до опубликованного снимка.
+
+    ``origins`` ограничивает матрицу поездками из перечисленных городов —
+    нагрузочный прогон конвейера на доле объёма. Такой снимок на витрину не
+    попадает.
+    """
     stages: list[dict[str, Any]] = []
 
     with session_scope() as session:
@@ -197,6 +238,7 @@ def run_daily_pipeline(
             families=families,
             is_synthetic=is_synthetic,
             profile_version=profile_version,
+            origins=origins,
         )
     stages.append(
         {

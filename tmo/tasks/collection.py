@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from tmo.core.config import get_settings
 from tmo.core.enums import JobStatus, SnapshotStatus
 from tmo.core.logging import get_logger, log_context
-from tmo.core.timeutil import now_utc, operational_date_for
+from tmo.core.timeutil import now_utc, snapshot_date_for
 from tmo.db import models
 from tmo.db.session import session_scope
 from tmo.services.calculation import calculate_snapshot as calculate_service
@@ -38,7 +38,7 @@ def _settings():
 
 
 def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | None:
-    snapshot_date = snapshot_date or operational_date_for()
+    snapshot_date = snapshot_date or snapshot_date_for()
     return session.scalar(
         select(models.MarketSnapshot.id)
         .where(models.MarketSnapshot.snapshot_date == snapshot_date)
@@ -50,7 +50,7 @@ def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | No
 @celery_app.task(name="tmo.open_snapshot", bind=True, time_limit=900, soft_time_limit=600)
 def open_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
     """Создаёт снимок и план на операционные сутки."""
-    target = date.fromisoformat(snapshot_date) if snapshot_date else operational_date_for()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
     with session_scope() as session:
         creation = create_snapshot(session, snapshot_date=target)
     logger.info("Снимок открыт", snapshot_id=creation.snapshot_id, planned=creation.planned)
@@ -77,7 +77,7 @@ COLLECT_FAMILY_TIME_LIMIT = 10 * 3600
 )
 def collect_family(self, family: str, snapshot_date: str | None = None) -> dict[str, Any]:
     """Собирает одно семейство наблюдений текущего снимка."""
-    target = date.fromisoformat(snapshot_date) if snapshot_date else operational_date_for()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
     with session_scope() as session:
         snapshot_id = _current_snapshot_id(session, target)
         if snapshot_id is None:

@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from tmo.core.config import get_settings
 from tmo.core.enums import JobStatus
 from tmo.core.logging import get_logger
-from tmo.core.timeutil import now_utc, operational_date_for
+from tmo.core.timeutil import now_utc, snapshot_date_for
 from tmo.db import models
 from tmo.db.session import session_scope
 from tmo.storage.raw_store import RawStore
@@ -46,7 +46,7 @@ def watch_collection_progress() -> dict[str, Any]:
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)
-            .where(models.MarketSnapshot.snapshot_date == operational_date_for())
+            .where(models.MarketSnapshot.snapshot_date == snapshot_date_for())
             .order_by(models.MarketSnapshot.attempt_no.desc())
             .limit(1)
         )
@@ -135,7 +135,7 @@ def daily_quality_digest(snapshot_date: str | None = None) -> dict[str, Any]:
     from tmo.services.coverage import compute_coverage
     from tmo.services.showcase import snapshot_overview
 
-    target = date.fromisoformat(snapshot_date) if snapshot_date else operational_date_for()
+    target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
     with session_scope() as session:
         snapshot = session.scalars(
             select(models.MarketSnapshot)

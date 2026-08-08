@@ -199,6 +199,48 @@ def test_unreached_planned_job_returns_to_plan(database: str, open_circuit) -> N
 # --------------------------------------------------------------------------- #
 
 
+def test_connector_hands_out_one_transport_to_all_threads() -> None:
+    """Клиент источника создаётся один раз, сколько бы потоков ни просило.
+
+    Без блокировки потоки пачки одновременно видят ``None`` и создают каждый
+    свой ``SourceTransport``. Побеждает последний записавший, остальные работают
+    через собственные объекты — и счётчик обращений наблюдения считается на
+    одном клиенте, пока запросы уходят через другой. В базу попадает ноль.
+
+    Та же гонка была устранена в ``TutuConnector.mcp()``; уровнем ниже она
+    осталась и проявилась только на живом многопоточном прогоне 08.08.2026.
+    """
+    from tmo.catalog.registry import source_registry
+    from tmo.connectors.base import BaseConnector
+
+    class _Probe(BaseConnector):
+        code = "tutu_mcp"
+
+        def collect_rail(self, query, budget): ...
+        def collect_air(self, query, budget): ...
+        def collect_hotel(self, query, budget): ...
+
+    connector = _Probe(source_registry().get("tutu_mcp"))
+    barrier = threading.Barrier(8)
+    seen: list[int] = []
+    lock = threading.Lock()
+
+    def grab() -> None:
+        barrier.wait()
+        transport = connector.transport()
+        with lock:
+            seen.append(id(transport))
+
+    threads = [threading.Thread(target=grab) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    connector.close()
+
+    assert len(set(seen)) == 1, f"создано {len(set(seen))} клиентов вместо одного"
+
+
 def test_call_counter_does_not_leak_between_threads() -> None:
     """Клиент общий на источник, счётчик наблюдения — нет.
 
@@ -280,51 +322,34 @@ def test_every_scheduled_task_is_registered() -> None:
     assert not missing, f"в расписании есть незарегистрированные задачи: {sorted(missing)}"
 
 
-def test_whole_night_belongs_to_one_snapshot() -> None:
-    """Все задачи цикла обязаны указывать на один и тот же снимок.
+def test_whole_cycle_stays_inside_one_calendar_day() -> None:
+    """Расписание обязано укладываться в одни календарные сутки МСК.
 
-    Цикл переходит через полночь: авиа в 21:00, публикация в 09:30 следующего
-    дня. По календарю это разные сутки — без вечернего рубежа авиа собиралось бы
-    во вчерашний снимок, а утренний недосчитывался бы 8 700 наблюдений при
-    полностью собранных данных.
+    На этом держится единственность даты снимка: она календарная, и все задачи
+    цикла получают её одинаково. Вынос любого сбора за полночь назад развёл бы
+    семейства по разным снимкам — каждый оказался бы неполным при полностью
+    собранных данных.
+
+    Тест не запрещает такой перенос, а требует вернуть вместе с ним вечерний
+    рубеж дат: он здесь был, пока сбор авиа стоял на 21:00, и снят вместе с ним.
     """
     from datetime import datetime
 
-    from tmo.core.timeutil import MSK, operational_date_for, snapshot_date_for
-
-    plan = datetime(2026, 8, 7, 20, 30, tzinfo=MSK)
-    air = datetime(2026, 8, 7, 21, 0, tzinfo=MSK)
-    hotel = datetime(2026, 8, 8, 5, 30, tzinfo=MSK)
-    publish = datetime(2026, 8, 8, 9, 30, tzinfo=MSK)
-
-    dates = {operational_date_for(m) for m in (plan, air, hotel, publish)}
-    assert dates == {date(2026, 8, 8)}, f"цикл разъехался по снимкам: {sorted(dates)}"
-
-    # Витрина остаётся на календарной дате: опубликованный снимок за 7 августа
-    # не должен помечаться устаревшим в 21:00 того же дня.
-    assert snapshot_date_for(air) == date(2026, 8, 7)
-
-
-def test_evening_boundary_precedes_the_first_task_of_the_cycle() -> None:
-    """Рубеж суток обязан лежать раньше первой задачи цикла.
-
-    Иначе открытие снимка и первый сбор окажутся по разные стороны границы:
-    план ляжет под сегодняшней датой, сбор пойдёт искать завтрашнюю и заведёт
-    второй снимок.
-    """
-    from tmo.core.timeutil import OPERATIONAL_DAY_STARTS_HOUR
+    from tmo.core.timeutil import MSK, snapshot_date_for
 
     celery_app = _loaded_celery_app()
-    evening_tasks = [
-        (min(entry["schedule"].hour), name)
-        for name, entry in celery_app.conf.beat_schedule.items()
-        if name != "watch-progress" and min(entry["schedule"].hour) >= 12
-    ]
-    assert evening_tasks, "проверка бессмысленна, если вечерних задач нет"
-    for hour, name in evening_tasks:
-        assert hour >= OPERATIONAL_DAY_STARTS_HOUR, (
-            f"{name} в {hour}:00 лежит раньше рубежа {OPERATIONAL_DAY_STARTS_HOUR}:00"
+    day = date(2026, 8, 8)
+
+    dates = set()
+    for name, entry in celery_app.conf.beat_schedule.items():
+        if name == "watch-progress":
+            continue
+        hour, minute = min(entry["schedule"].hour), min(entry["schedule"].minute)
+        dates.add(
+            snapshot_date_for(datetime(day.year, day.month, day.day, hour, minute, tzinfo=MSK))
         )
+
+    assert dates == {day}, f"цикл разъехался по датам: {sorted(dates)}"
 
 
 def test_batch_size_fits_the_batch_budget(family: str = "AIR") -> None:
@@ -334,23 +359,19 @@ def test_batch_size_fits_the_batch_budget(family: str = "AIR") -> None:
     бюджета в 240: каждая пачка закрывалась `BUDGET_EXHAUSTED`, не дойдя до
     трети своих наблюдений, и за ночь так потерялось 219 наблюдений.
     """
-    from tmo.catalog.registry import source_registry
     from tmo.core.config import get_settings
     from tmo.services.pipeline import (
         BATCH_BUDGET_FILL,
-        OBSERVATION_COST_SECONDS,
+        OBSERVATION_COST,
         batch_size_for_family,
+        seconds_per_observation,
     )
 
     settings = get_settings()
-    registry = source_registry()
 
-    for name, costs in OBSERVATION_COST_SECONDS.items():
+    for name in OBSERVATION_COST:
         size = batch_size_for_family(name)
-        seconds_per_job = sum(
-            cost / max(1, registry.get(code).concurrency) for code, cost in costs.items()
-        )
-        expected = size * seconds_per_job
+        expected = size * seconds_per_observation(name)
         assert expected <= settings.batch_soft_budget_seconds, (
             f"{name}: пачка из {size} наблюдений требует {expected:.0f} с "
             f"при бюджете {settings.batch_soft_budget_seconds} с"
@@ -373,20 +394,13 @@ def test_schedule_starts_the_most_expensive_family_first() -> None:
     Проверяется не порядок ради порядка: при старте в 02:00 авиа получало три
     часа до расчёта и собирало 3,5 % семейства.
     """
-    from tmo.core.timeutil import OPERATIONAL_DAY_STARTS_HOUR
-
     celery_app = _loaded_celery_app()
     schedule = celery_app.conf.beat_schedule
 
     def at(entry_name: str) -> int:
-        """Минуты от начала цикла, а не от полуночи.
-
-        Цикл переходит через полночь, и сравнение по календарным часам сказало
-        бы, что сбор ЖД в 05:15 идёт раньше авиа в 21:00.
-        """
+        """Минуты от полуночи: цикл целиком лежит внутри одних суток."""
         entry = schedule[entry_name]["schedule"]
-        hour, minute = min(entry.hour), min(entry.minute)
-        return ((hour - OPERATIONAL_DAY_STARTS_HOUR) % 24) * 60 + minute
+        return min(entry.hour) * 60 + min(entry.minute)
 
     air = at("collect-air")
     for cheap in ("collect-rail", "collect-hotel"):

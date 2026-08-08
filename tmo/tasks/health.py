@@ -16,13 +16,13 @@ from sqlalchemy import func, select
 
 from tmo.core.config import get_settings
 from tmo.core.enums import JobStatus
-from tmo.core.timeutil import now_utc, operational_date_for
+from tmo.core.timeutil import now_utc, snapshot_date_for
 from tmo.db import models
 from tmo.db.session import session_scope
 
 #: Наблюдения, которые действительно отданы в очередь. ``PLANNED`` сюда не
-#: входит намеренно: расписание разносит семейства по ночи (авиа в 21:00, ЖД в
-#: 05:15, проживание в 05:30), и между ними тысячи наблюдений часами лежат
+#: входит намеренно: расписание разносит семейства по ночи (авиа в 01:00, ЖД в
+#: 06:15, проживание в 06:30), и между ними тысячи наблюдений часами лежат
 #: запланированными. Считать их незавершённой работой значит объявлять застоем
 #: паузу, заложенную в расписание, — и получать перезапуск воркера от autoheal
 #: ровно к моменту, когда следующему семейству пора начинать.
@@ -36,7 +36,7 @@ def check() -> tuple[bool, str]:
     with session_scope() as session:
         snapshot_id = session.scalar(
             select(models.MarketSnapshot.id)
-            .where(models.MarketSnapshot.snapshot_date == operational_date_for())
+            .where(models.MarketSnapshot.snapshot_date == snapshot_date_for())
             .order_by(models.MarketSnapshot.attempt_no.desc())
             .limit(1)
         )

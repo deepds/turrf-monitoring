@@ -33,7 +33,7 @@ from tmo.core.enums import CollectionFamily, JobStatus, SnapshotStatus
 from tmo.core.logging import get_logger
 from tmo.core.timeutil import HORIZON_DAYS, now_utc, snapshot_date_for
 from tmo.db import models
-from tmo.planner.matrix import CollectionMatrix, build_matrix
+from tmo.planner.matrix import CollectionMatrix, Scope, build_matrix
 
 logger = get_logger(__name__)
 
@@ -166,8 +166,15 @@ def create_snapshot(
     is_synthetic: bool = False,
     profile_version: str | None = None,
     matrix: CollectionMatrix | None = None,
+    origins: tuple[str, ...] | None = None,
 ) -> SnapshotCreation:
-    """Создаёт снимок и детерминированный план наблюдений."""
+    """Создаёт снимок и детерминированный план наблюдений.
+
+    ``origins`` ограничивает матрицу поездками из перечисленных городов. Такой
+    снимок помечается ``is_partial_scope`` и витриной рынка не становится: его
+    собственное покрытие может быть стопроцентным при том, что описана четверть
+    рынка, и ворота, считающие покрытие от плана, его пропустят.
+    """
     settings = get_settings()
     snapshot_date = snapshot_date or snapshot_date_for()
     horizon_days = horizon_days or settings.horizon_days or HORIZON_DAYS
@@ -182,12 +189,15 @@ def create_snapshot(
     )
     attempt_no = int(previous or 0) + 1
 
+    scope = Scope.of(city_registry(), origins)
     snapshot = models.MarketSnapshot(
         snapshot_date=snapshot_date,
         attempt_no=attempt_no,
         status=SnapshotStatus.PLANNING,
         horizon_days=horizon_days,
         is_synthetic=is_synthetic,
+        is_partial_scope=scope.is_restricted,
+        scope=scope.as_dict(),
         started_at=now_utc(),
         created_at=now_utc(),
         quality_summary={},
@@ -197,7 +207,7 @@ def create_snapshot(
     session.flush()
 
     matrix = matrix or build_matrix(
-        snapshot_date, horizon_days=horizon_days, families=families
+        snapshot_date, horizon_days=horizon_days, families=families, origins=origins
     )
     session.add_all(
         models.CollectionJob(
@@ -267,6 +277,11 @@ def latest_published(session: Session) -> models.MarketSnapshot | None:
                 [SnapshotStatus.READY.value, SnapshotStatus.DEGRADED.value]
             ),
             models.MarketSnapshot.is_synthetic.is_(False),
+            # Снимок неполной области описывает часть рынка при собственном
+            # покрытии близком к ста процентам. Ворота его пропускают — они
+            # считают покрытие от плана, а план у него свой, — поэтому отсекать
+            # приходится здесь.
+            models.MarketSnapshot.is_partial_scope.is_(False),
         )
         .order_by(
             models.MarketSnapshot.snapshot_date.desc(),

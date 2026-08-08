@@ -56,15 +56,25 @@ def test_source_limits_are_conservative_by_default() -> None:
     одновременность из `sources.yaml`, а `settings.tutu_concurrency` оставался
     декорацией. Тест был зелёным и при рабочей точке, отличной от проверяемой.
 
-    Границы — из ночных замеров: 12-15 одновременных источник не держит,
-    шесть держал три часа подряд.
+    Границы — из замеров, а не из осторожности:
+
+    * шесть одновременных источник держал три часа подряд без отказов;
+    * на 12-15 ночью 08.08.2026 отвечал 503 и размыкал цепь;
+    * дневной замер 12 одновременных при 240 в минуту — 503 через минуты.
+
+    Двенадцать — верхняя граница наблюдавшегося: рабочая точка стоит ровно на
+    ней сознательно, потому что меньшая одновременность не укладывается в окно.
+    Выше идти нельзя без нового замера, и этот предел здесь ровно для того,
+    чтобы такое изменение не прошло молча.
     """
     from tmo.catalog.registry import source_registry
 
     limits = {source.code: source for source in source_registry().sources}
-    assert limits["tutu_mcp"].concurrency <= 8
+    assert limits["tutu_mcp"].concurrency <= 12
     assert limits["rzd"].concurrency <= 6
-    assert limits["tutu_mcp"].rate_limit_per_minute <= 240
+    # Темп выше 180 в сочетании с высокой одновременностью — то самое сочетание,
+    # которое ломалось. Поднимать его следует отдельной ночью и отдельным замером.
+    assert limits["tutu_mcp"].rate_limit_per_minute <= 180
 
 
 def test_soft_budget_is_below_hard_timeout(monkeypatch: pytest.MonkeyPatch) -> None:

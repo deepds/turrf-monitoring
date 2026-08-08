@@ -120,6 +120,15 @@ class MarketSnapshot(Base):
     #: Снимок, собранный воспроизведением записанных ответов. Витриной рынка
     #: не является ни при каких настройках.
     is_synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Снимок неполной области: наблюдались поездки не из всех городов.
+    #: Витриной рынка не является по той же причине, что и синтетический, но по
+    #: другому основанию: данные настоящие, неполна матрица. Своё покрытие такой
+    #: снимок может иметь стопроцентным — и именно поэтому ворота его пропустят,
+    #: если не остановить отдельно.
+    is_partial_scope: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Чем именно ограничена область: города отправления и города проживания.
+    #: Пустой словарь у полной матрицы.
+    scope: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
 
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     primary_collection_finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
