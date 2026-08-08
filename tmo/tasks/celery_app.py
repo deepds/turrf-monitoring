@@ -52,6 +52,13 @@ LONGEST_TASK_SECONDS = 10 * 3600
 celery_app.conf.update(
     timezone="Europe/Moscow",
     enable_utc=True,
+    # Celery по умолчанию подменяет обработчики корневого логгера своими, и
+    # структурные поля наших записей исчезают: в журнале воркера остаётся
+    # «Одновременность повышена» без значения, «Размыкатель цепи разомкнут» без
+    # first_cause. Именно эти поля и составляют весь смысл записи — по такому
+    # журналу ночь не расследуется. Форматтер настроен в `configure_logging`
+    # выше, и перехват его отменяет.
+    worker_hijack_root_logger=False,
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],

@@ -124,8 +124,11 @@ class AdaptiveConcurrency:
             if self._clean_streak >= self.growth_after and self._current < self.ceiling:
                 self._current = min(float(self.ceiling), self._current + 1.0)
                 self._clean_streak = 0
+                # Значение стоит и в тексте, и в поле. Поле разбирают машины,
+                # текст читает человек — а обработчик, теряющий поля, ещё
+                # встретится: именно так однажды выглядел журнал воркера.
                 logger.info(
-                    "Одновременность повышена",
+                    f"Одновременность повышена до {int(self._current)}",
                     value=int(self._current),
                     ceiling=self.ceiling,
                 )
@@ -145,7 +148,7 @@ class AdaptiveConcurrency:
             previous = int(self._current)
             self._current = max(float(self.floor), self._current / 2.0)
             logger.warning(
-                "Одновременность снижена после отказа источника",
+                f"Одновременность снижена после отказа источника: {previous} → {int(self._current)}",
                 was=previous,
                 value=int(self._current),
                 floor=self.floor,
