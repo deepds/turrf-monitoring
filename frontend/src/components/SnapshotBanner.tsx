@@ -14,10 +14,55 @@
  * работой.
  */
 
+import { useEffect, useState } from 'react';
 import { Alert, Descriptions, Progress, Space, Tag, Typography } from 'antd';
+import { api } from '../api/client';
 import type { CycleProgress, SnapshotContext } from '../api/types';
 import { dateLabel, dateTimeLabel, percent } from '../format';
 import { snapshotStatus } from '../labels';
+
+/** Как часто перезапрашивать состояние идущего сбора. */
+const REFRESH_MS = 30_000;
+
+/**
+ * Свежее состояние сбора.
+ *
+ * Контекст снимка приходит вместе с данными экрана и загружается один раз. Для
+ * закрытого снимка этого достаточно — он не меняется. Для идущего сбора
+ * достаточно ровно наоборот: плашка прогресса существует, чтобы на него
+ * смотреть, а застывшие цифры не отличить от вставшего сбора.
+ *
+ * Перезапрашивается только состояние цикла, а не данные экрана: это несколько
+ * счётчиков против графиков и таблиц на десятки тысяч строк.
+ */
+function useLiveProgress(initial: CycleProgress | null): CycleProgress | null {
+  const [progress, setProgress] = useState(initial);
+
+  useEffect(() => setProgress(initial), [initial]);
+
+  const closed = progress?.is_closed ?? true;
+  useEffect(() => {
+    if (closed) return;
+    let alive = true;
+    const tick = () => {
+      api
+        .currentCycle()
+        .then((payload) => {
+          if (alive) setProgress(payload.progress);
+        })
+        .catch(() => {
+          /* сеть моргнула — оставляем прежние цифры до следующей попытки */
+        });
+    };
+    const timer = window.setInterval(tick, REFRESH_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [closed]);
+
+  return progress;
+}
 
 const STEP_LABEL: Record<CycleProgress['step'], string> = {
   OPEN: 'открывается снимок',
@@ -66,6 +111,15 @@ function TodayProgress({ today }: { today: CycleProgress }) {
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               до рубежа суток: {Math.floor(today.minutes_left / 60)} ч {today.minutes_left % 60} мин
             </Typography.Text>
+            {/* Время последнего обновления: без него застывшая страница
+                неотличима от вставшего сбора. */}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              обновлено в {new Date().toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </Typography.Text>
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             Проценты — доля наблюдений, получивших ответ. Пропуски — те, к которым
@@ -81,6 +135,7 @@ function TodayProgress({ today }: { today: CycleProgress }) {
 
 export function SnapshotBanner({ context }: { context: SnapshotContext }) {
   const status = snapshotStatus(context.status);
+  const today = useLiveProgress(context.today);
   const critical = context.publication_notes?.filter((note) => note.severity === 'CRITICAL') ?? [];
   const warnings = context.publication_notes?.filter((note) => note.severity === 'WARNING') ?? [];
 
@@ -111,7 +166,7 @@ export function SnapshotBanner({ context }: { context: SnapshotContext }) {
           }
         />
       )}
-      {context.today && !context.today.is_closed && <TodayProgress today={context.today} />}
+      {today && !today.is_closed && <TodayProgress today={today} />}
       {context.is_fallback && !context.is_synthetic && context.fallback_reason !== 'IN_PROGRESS' && (
         <Alert
           type={context.fallback_reason === 'FAILED' ? 'warning' : 'info'}
