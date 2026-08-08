@@ -94,6 +94,20 @@ export function SnapshotBanner({ context }: { context: SnapshotContext }) {
           }
         />
       )}
+      {!context.evidence_included && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Снимок перенесён без предложений"
+          description={
+            `Данные загружены со стенда ${context.origin_stand ?? 'неизвестного'} ` +
+            'уровнем showcase: цифры и оценка качества на месте, но раскрыть ' +
+            'значение до конкретного предложения конкретного источника нельзя — ' +
+            'предложения не переносились. Пустой список в карточке метрики ' +
+            'означает именно это, а не ошибку расчёта.'
+          }
+        />
+      )}
       {context.today && !context.today.is_closed && <TodayProgress today={context.today} />}
       {context.is_fallback && !context.is_synthetic && context.fallback_reason !== 'IN_PROGRESS' && (
         <Alert

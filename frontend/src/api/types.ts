@@ -27,6 +27,16 @@ export interface SnapshotContext {
    */
   fallback_reason: 'IN_PROGRESS' | 'FAILED' | 'NOT_STARTED' | null;
   today: CycleProgress | null;
+  /**
+   * Несёт ли снимок предложения.
+   *
+   * `false` у снимка, перенесённого с другого стенда уровнем `showcase`: цифры
+   * и качество на месте, раскрыть их до конкретного предложения нельзя.
+   */
+  evidence_included: boolean;
+  /** Стенд, с которого снимок перенесён. `null` — собран здесь. */
+  origin_stand: string | null;
+  imported_at: string | null;
   published_at: string | null;
   coverage_total: number;
   coverage_rail: number;

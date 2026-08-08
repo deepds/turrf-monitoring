@@ -65,6 +65,15 @@ class SnapshotContext:
             "version_label": f"v{self.snapshot.attempt_no}",
             "fallback_reason": self.fallback_reason,
             "today": self.today,
+            # Снимок, перенесённый уровнем `showcase`, не несёт предложений: у
+            # его цифр есть значение и качество, но раскрыть их до конкретного
+            # предложения нельзя. Молчать об этом нельзя тем более — пустой
+            # список читался бы как дефект расчёта.
+            "evidence_included": bool(self.snapshot.evidence_included),
+            "origin_stand": self.snapshot.origin_stand,
+            "imported_at": self.snapshot.imported_at.isoformat()
+            if self.snapshot.imported_at
+            else None,
             "is_synthetic": bool(self.snapshot.is_synthetic),
             "is_fallback": self.is_fallback,
             "published_at": self.snapshot.published_at.isoformat()
