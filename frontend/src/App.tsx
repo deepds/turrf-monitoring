@@ -59,18 +59,30 @@ export function App() {
     >
       <Layout style={{ minHeight: '100vh' }}>
         <Layout.Header style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              lineHeight: 1.2,
-            }}
-          >
-            <Typography.Text strong style={{ color: '#fff', fontSize: 16, whiteSpace: 'nowrap' }}>
-              Туризм.рф
-            </Typography.Text>
-            <Typography.Text strong style={{ color: '#fff', fontSize: 16, whiteSpace: 'nowrap' }}>
+          {/* Выворотная версия знака: на тёмной полосе фирменный синий читается
+              плохо, поэтому буквы белые, а красная точка остаётся — она и есть
+              узнаваемая часть логотипа. Начертание набрано текстом, а не
+              картинкой: приближение шрифтом честнее растянутого растра, и
+              заменить его на официальный SVG можно одной правкой. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+            <span
+              style={{
+                fontSize: 16,
+                fontWeight: 500,
+                letterSpacing: '0.02em',
+                whiteSpace: 'nowrap',
+                color: '#fff',
+              }}
+            >
+              ТУРИЗМ<span style={{ color: '#E1261C' }}>.</span>РФ
+            </span>
+            <span
+              aria-hidden
+              style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.22)' }}
+            />
+            <Typography.Text
+              style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, whiteSpace: 'nowrap' }}
+            >
               Стоимость поездок
             </Typography.Text>
           </div>
