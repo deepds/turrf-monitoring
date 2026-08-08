@@ -130,6 +130,19 @@ class MarketSnapshot(Base):
     #: Пустой словарь у полной матрицы.
     scope: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
 
+    #: Снимок, загруженный с другого стенда. Пустой отпечаток — собран здесь.
+    #: По отпечатку узнаётся повторная загрузка: тот же файл не создаёт вторую
+    #: копию, сколько бы раз его ни принесли.
+    source_digest: Mapped[str | None] = mapped_column(String(64), unique=True)
+    #: Откуда пришёл. Нужен при разборе расхождений между стендами: два снимка
+    #: одной даты — это две версии, и знать, чья какая, обязательно.
+    origin_stand: Mapped[str | None] = mapped_column(String(64))
+    imported_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    #: Переносились ли предложения. У снимка уровня `showcase` их нет, и
+    #: раскрытие цифры до конкретного предложения не работает. Витрина обязана
+    #: сказать это прямо: пустой список иначе читается как дефект расчёта.
+    evidence_included: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     primary_collection_finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     recovery_finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)

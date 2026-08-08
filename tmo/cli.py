@@ -181,6 +181,65 @@ def cmd_coverage(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_snapshot(args: argparse.Namespace) -> int:
+    """Выгружает снимок в каталог для переноса на другой стенд."""
+    from pathlib import Path
+
+    from sqlalchemy import select
+
+    from tmo.db import models
+    from tmo.db.session import session_scope
+    from tmo.services.transfer import export_snapshot
+
+    target = _parse_date(args.snapshot_date) or snapshot_date_for()
+    with session_scope() as session:
+        query = select(models.MarketSnapshot.id).where(
+            models.MarketSnapshot.snapshot_date == target
+        )
+        if args.attempt is not None:
+            query = query.where(models.MarketSnapshot.attempt_no == args.attempt)
+        snapshot_id = session.scalar(query.order_by(models.MarketSnapshot.attempt_no.desc()))
+        if snapshot_id is None:
+            _print({"error": f"Снимок за {target} не найден"})
+            return 1
+
+        destination = Path(args.out) / target.isoformat()
+        manifest = export_snapshot(
+            session,
+            snapshot_id,
+            destination,
+            level=args.level,
+            origin_stand=args.stand,
+        )
+    _print(
+        {
+            "destination": str(destination),
+            "level": manifest["level"],
+            "content_digest": manifest["content_digest"],
+            "files": {name: meta["rows"] for name, meta in manifest["files"].items()},
+            "bytes": sum(meta["bytes"] for meta in manifest["files"].values()),
+        }
+    )
+    return 0
+
+
+def cmd_import_snapshot(args: argparse.Namespace) -> int:
+    """Загружает выгруженный снимок как новую версию своей даты."""
+    from pathlib import Path
+
+    from tmo.db.session import session_scope
+    from tmo.services.transfer import ImportRefused, import_snapshot
+
+    with session_scope() as session:
+        try:
+            result = import_snapshot(session, Path(args.path))
+        except ImportRefused as exc:
+            _print({"error": str(exc)})
+            return 1
+    _print(result)
+    return 0
+
+
 def cmd_check_sources(args: argparse.Namespace) -> int:
     """Живая проверка источников. Единственная команда, ходящая в сеть."""
     from tmo.catalog.registry import source_registry
@@ -274,6 +333,27 @@ def build_parser() -> argparse.ArgumentParser:
     coverage = sub.add_parser("coverage", help="Покрытие снимка")
     coverage.add_argument("--snapshot-date", default="today")
     coverage.set_defaults(func=cmd_coverage)
+
+    export = sub.add_parser("export-snapshot", help="Выгрузить снимок для переноса")
+    export.add_argument("--snapshot-date", help="Дата наблюдения; по умолчанию сегодня")
+    export.add_argument("--attempt", type=int, help="Номер попытки; по умолчанию последняя")
+    export.add_argument(
+        "--level",
+        choices=["showcase", "evidence"],
+        default="showcase",
+        help=(
+            "showcase — всё для витрины, единицы мегабайт, проходит через git. "
+            "evidence — плюс предложения и связи, сотни мегабайт: раскрытие "
+            "цифры до конкретного предложения работает только на нём"
+        ),
+    )
+    export.add_argument("--out", default="export", help="Каталог выгрузки")
+    export.add_argument("--stand", default="", help="Имя стенда-источника: node67, meduza")
+    export.set_defaults(func=cmd_export_snapshot)
+
+    load = sub.add_parser("import-snapshot", help="Загрузить снимок с другого стенда")
+    load.add_argument("path", help="Каталог с manifest.json")
+    load.set_defaults(func=cmd_import_snapshot)
 
     sub.add_parser("check-sources", help="Живая проверка источников").set_defaults(
         func=cmd_check_sources
