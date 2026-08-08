@@ -15,27 +15,10 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import type { Confidence } from '../api/types';
-
-const CONFIDENCE_META: Record<Confidence, { color: string; label: string; hint: string }> = {
-  HIGH: {
-    color: 'green',
-    label: 'Высокая',
-    hint: 'Полная выдача, достаточная выборка, все ожидаемые источники ответили',
-  },
-  MEDIUM: {
-    color: 'gold',
-    label: 'Средняя',
-    hint: 'Выборка меньше целевой, либо выдача обрезана, либо один из источников не ответил',
-  },
-  LOW: {
-    color: 'red',
-    label: 'Низкая',
-    hint: 'Очень малая выборка: цифру нельзя считать описанием рынка',
-  },
-};
+import { CONFIDENCE } from '../labels';
 
 export function ConfidenceTag({ level }: { level: Confidence }) {
-  const meta = CONFIDENCE_META[level];
+  const meta = CONFIDENCE[level];
   return (
     <Tooltip title={meta.hint}>
       <Tag color={meta.color} style={{ marginInlineEnd: 0 }}>

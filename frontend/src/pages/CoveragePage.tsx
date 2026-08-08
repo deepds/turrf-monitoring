@@ -2,7 +2,7 @@
  * Покрытие и качество.
  *
  * Экран отвечает на вопрос «можно ли доверять сегодняшней витрине» без чтения
- * логов: сколько наблюдений было запланировано, сколько собралось, где дыры,
+ * логов: сколько наблюдений было запланировано, сколько собралось, где пропуски,
  * что отвечали источники и почему снимок получил свой статус.
  */
 
@@ -25,6 +25,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { api } from '../api/client';
 import type { CoverageResponse, FamilyCoverage, SnapshotListItem } from '../api/types';
 import { dateLabel, dateTimeLabel, percent } from '../format';
+import { confidence, metricType, snapshotStatus } from '../labels';
 
 const FAMILY_LABEL: Record<string, string> = {
   RAIL: 'Железная дорога',
@@ -84,7 +85,7 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
       render: (value: number) => (
         <Space size={4}>
           <span>{value}</span>
-          {value > 0 && <Tag>не дыра</Tag>}
+          {value > 0 && <Tag>не пропуск</Tag>}
         </Space>
       ),
     },
@@ -156,7 +157,7 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
             style={{ minWidth: 240 }}
             options={snapshots.map((item) => ({
               value: item.snapshot_date,
-              label: `${dateLabel(item.snapshot_date)} · ${item.status}${
+              label: `${dateLabel(item.snapshot_date)} · ${snapshotStatus(item.status).label}${
                 item.is_synthetic ? ' · демо' : ''
               }`,
             }))}
@@ -170,7 +171,7 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
                 style={{ minWidth: 200 }}
                 options={versions.map((version) => ({
                   value: version.attempt_no,
-                  label: `${version.label} · ${version.status} · ${percent(version.coverage_total)}`,
+                  label: `${version.label} · ${snapshotStatus(version.status).label} · ${percent(version.coverage_total)}`,
                 }))}
               />
             </>
@@ -197,7 +198,15 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
                 size="small"
                 column={{ xs: 1, sm: 2, lg: 4 }}
                 items={[
-                  { key: 'status', label: 'Статус', children: data.overview.snapshot.status },
+                  {
+                    key: 'status',
+                    label: 'Статус',
+                    children: (
+                      <Tag color={snapshotStatus(data.overview.snapshot.status).color}>
+                        {snapshotStatus(data.overview.snapshot.status).label}
+                      </Tag>
+                    ),
+                  },
                   {
                     key: 'started',
                     label: 'Начат',
@@ -222,7 +231,7 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
                   },
                   {
                     key: 'holes',
-                    label: 'Технических дыр',
+                    label: 'Технических пропусков',
                     children:
                       data.holes.count > 0 ? (
                         <Tag color="red">{data.holes.count}</Tag>
@@ -262,17 +271,11 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
               <Row gutter={[16, 16]}>
                 {Object.entries(data.overview.confidence_distribution).map(([type, levels]) => (
                   <Col xs={24} md={12} lg={6} key={type}>
-                    <Card size="small" type="inner" title={type}>
+                    <Card size="small" type="inner" title={metricType(type)}>
                       <Space direction="vertical" size={4}>
                         {Object.entries(levels).map(([level, count]) => (
                           <Space key={level}>
-                            <Tag
-                              color={
-                                level === 'HIGH' ? 'green' : level === 'MEDIUM' ? 'gold' : 'red'
-                              }
-                            >
-                              {level}
-                            </Tag>
+                            <Tag color={confidence(level).color}>{confidence(level).label}</Tag>
                             <span>{count}</span>
                           </Space>
                         ))}

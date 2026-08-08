@@ -30,6 +30,7 @@ import { DownloadOutlined, InboxOutlined } from '@ant-design/icons';
 import { api } from '../api/client';
 import type { ImportResult, SnapshotListItem } from '../api/types';
 import { dateLabel, percent } from '../format';
+import { snapshotStatus } from '../labels';
 
 type Level = 'showcase' | 'evidence';
 
@@ -123,7 +124,7 @@ export function TransferPage({ snapshots }: { snapshots: SnapshotListItem[] }) {
               style={{ minWidth: 240 }}
               options={snapshots.map((item) => ({
                 value: item.snapshot_date,
-                label: `${dateLabel(item.snapshot_date)} · ${item.status}`,
+                label: `${dateLabel(item.snapshot_date)} · ${snapshotStatus(item.status).label}`,
               }))}
             />
             <Typography.Text type="secondary">Версия</Typography.Text>

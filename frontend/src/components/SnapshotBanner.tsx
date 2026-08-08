@@ -17,17 +17,12 @@
 import { Alert, Descriptions, Progress, Space, Tag, Typography } from 'antd';
 import type { CycleProgress, SnapshotContext } from '../api/types';
 import { dateLabel, dateTimeLabel, percent } from '../format';
-
-const STATUS_META: Record<string, { color: string; label: string }> = {
-  READY: { color: 'green', label: 'Опубликован' },
-  DEGRADED: { color: 'orange', label: 'Опубликован с оговорками' },
-  FAILED: { color: 'red', label: 'Не опубликован' },
-};
+import { snapshotStatus } from '../labels';
 
 const STEP_LABEL: Record<CycleProgress['step'], string> = {
   OPEN: 'открывается снимок',
   COLLECT: 'первичный сбор',
-  RECOVER: 'досбор дыр',
+  RECOVER: 'досбор пропусков',
   CLOSE: 'расчёт и публикация',
   IDLE: 'сутки закрыты',
 };
@@ -60,7 +55,7 @@ function TodayProgress({ today }: { today: CycleProgress }) {
               ),
             )}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              дыр: {today.holes}
+              пропусков: {today.holes}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               до рубежа суток: {Math.floor(today.minutes_left / 60)} ч {today.minutes_left % 60} мин
@@ -77,7 +72,7 @@ function TodayProgress({ today }: { today: CycleProgress }) {
 }
 
 export function SnapshotBanner({ context }: { context: SnapshotContext }) {
-  const status = STATUS_META[context.status] ?? { color: 'default', label: context.status };
+  const status = snapshotStatus(context.status);
   const critical = context.publication_notes?.filter((note) => note.severity === 'CRITICAL') ?? [];
   const warnings = context.publication_notes?.filter((note) => note.severity === 'WARNING') ?? [];
 

@@ -27,7 +27,7 @@ const NAV = [
   { key: '/air-grid', icon: <TableOutlined />, label: 'Сетка авиа' },
   { key: '/hotels', icon: <HomeOutlined />, label: 'Проживание' },
   { key: '/coverage', icon: <SafetyCertificateOutlined />, label: 'Покрытие и качество' },
-  { key: '/transfer', icon: <SwapOutlined />, label: 'Перенос снимков' },
+  { key: '/transfer', icon: <SwapOutlined />, label: 'Загрузка' },
 ];
 
 export function App() {
