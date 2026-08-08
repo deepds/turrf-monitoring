@@ -9,6 +9,9 @@ description = "Ежедневный мониторинг стоимости по
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
+    # Загрузка снимка идёт файлом из браузера: без multipart FastAPI отказывает
+    # на этапе регистрации маршрута, а не при первом запросе.
+    "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0.30",
     "alembic>=1.13",

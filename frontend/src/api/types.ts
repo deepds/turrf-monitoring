@@ -315,6 +315,25 @@ export interface SnapshotListItem extends SnapshotVersion {
   versions: SnapshotVersion[];
 }
 
+/**
+ * Итог загрузки архива снимка.
+ *
+ * `DUPLICATE` — не ошибка: такой снимок уже есть, и решение о копии принимает
+ * человек. Повтор с `force` кладёт её следующей версией.
+ */
+export interface ImportResult {
+  status: 'IMPORTED' | 'DUPLICATE';
+  snapshot_id: number;
+  snapshot_date: string;
+  attempt_no: number;
+  version_label: string;
+  level?: string;
+  evidence_included?: boolean;
+  origin_stand?: string | null;
+  imported_at?: string | null;
+  rows?: Record<string, number>;
+}
+
 /** Состояние сбора за текущие сутки. */
 export interface CycleProgress {
   snapshot_id: number;

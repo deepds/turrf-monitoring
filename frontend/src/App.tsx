@@ -8,6 +8,7 @@ import {
   DashboardOutlined,
   HomeOutlined,
   SafetyCertificateOutlined,
+  SwapOutlined,
   TableOutlined,
 } from '@ant-design/icons';
 import { api } from './api/client';
@@ -18,6 +19,7 @@ import { AirGridPage } from './pages/AirGridPage';
 import { HotelsPage } from './pages/HotelsPage';
 import { MetricPage } from './pages/MetricPage';
 import { CoveragePage } from './pages/CoveragePage';
+import { TransferPage } from './pages/TransferPage';
 
 const NAV = [
   { key: '/trips', icon: <CompassOutlined />, label: 'Куда ехать' },
@@ -25,6 +27,7 @@ const NAV = [
   { key: '/air-grid', icon: <TableOutlined />, label: 'Сетка авиа' },
   { key: '/hotels', icon: <HomeOutlined />, label: 'Проживание' },
   { key: '/coverage', icon: <SafetyCertificateOutlined />, label: 'Покрытие и качество' },
+  { key: '/transfer', icon: <SwapOutlined />, label: 'Перенос снимков' },
 ];
 
 export function App() {
@@ -114,6 +117,7 @@ export function App() {
               <Route path="/air-grid" element={<AirGridPage snapshots={snapshots} />} />
               <Route path="/metrics/:metricId" element={<MetricPage dictionary={dictionary} />} />
               <Route path="/coverage" element={<CoveragePage snapshots={snapshots} />} />
+              <Route path="/transfer" element={<TransferPage snapshots={snapshots} />} />
               <Route path="*" element={<Navigate to="/trips" replace />} />
             </Routes>
           )}

@@ -11,6 +11,7 @@ import type {
   CoverageResponse,
   CycleProgress,
   Dictionary,
+  ImportResult,
   HotelChartResponse,
   MetricDetails,
   OffersResponse,
@@ -59,6 +60,37 @@ export const api = {
 
   /** Состояние сбора за текущие сутки. `progress: null` — снимок ещё не открыт. */
   currentCycle: () => request<{ progress: CycleProgress | null }>('/market-snapshots/current'),
+
+  /**
+   * Ссылка на архив снимка.
+   *
+   * Скачивание идёт навигацией браузера, а не fetch: архив полной матрицы —
+   * десятки мегабайт, и тянуть его в память страницы ради того, чтобы тут же
+   * отдать в файл, незачем.
+   */
+  archiveUrl: (snapshotDate: string, attemptNo: number, level: 'showcase' | 'evidence') =>
+    `${BASE}/market-snapshots/${snapshotDate}/archive?attempt_no=${attemptNo}&level=${level}`,
+
+  /** Загружает архив снимка. `force` — согласие положить копию новой версией. */
+  uploadArchive: async (file: File, force = false): Promise<ImportResult> => {
+    const body = new FormData();
+    body.append('file', file);
+    const response = await fetch(`${BASE}/market-snapshots/archive?force=${force}`, {
+      method: 'POST',
+      body,
+    });
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try {
+        const payload = await response.json();
+        if (payload?.detail) detail = String(payload.detail);
+      } catch {
+        /* тело не разобралось — остаётся код */
+      }
+      throw new ApiError(detail, response.status);
+    }
+    return response.json();
+  },
 
   origins: () => request<{ origins: { code: string; name: string }[] }>('/showcase/origins'),
 

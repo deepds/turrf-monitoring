@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     raw_storage_path: Path = PROJECT_ROOT / "var" / "raw"
     export_storage_path: Path = PROJECT_ROOT / "var" / "export"
 
+    #: Имя стенда. Едет в выгруженном снимке и показывается на витрине рядом с
+    #: загруженной версией: две версии одной даты без указания происхождения
+    #: сравнивать невозможно.
+    stand_name: str = ""
+
     # --- справочники -----------------------------------------------------
     catalog_path: Path = PACKAGE_ROOT / "catalog" / "data"
     active_methodology_profile: str = "baseline_v1"

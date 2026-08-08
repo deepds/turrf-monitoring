@@ -131,9 +131,10 @@ class MarketSnapshot(Base):
     scope: Mapped[dict] = mapped_column(JSONType, nullable=False, default=dict)
 
     #: Снимок, загруженный с другого стенда. Пустой отпечаток — собран здесь.
-    #: По отпечатку узнаётся повторная загрузка: тот же файл не создаёт вторую
-    #: копию, сколько бы раз его ни принесли.
-    source_digest: Mapped[str | None] = mapped_column(String(64), unique=True)
+    #: По отпечатку узнаётся повторная загрузка: тот же файл сначала спросит,
+    #: точно ли грузить снова, и только с согласия ляжет следующей версией.
+    #: Не уникален намеренно — согласие означает копию.
+    source_digest: Mapped[str | None] = mapped_column(String(64), index=True)
     #: Откуда пришёл. Нужен при разборе расхождений между стендами: два снимка
     #: одной даты — это две версии, и знать, чья какая, обязательно.
     origin_stand: Mapped[str | None] = mapped_column(String(64))

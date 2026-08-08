@@ -181,8 +181,100 @@ def test_same_bundle_is_not_imported_twice(collected_snapshot, tmp_path) -> None
         second = import_snapshot(session, tmp_path / "bundle")
 
     assert first["status"] == "IMPORTED"
-    assert second["status"] == "ALREADY_IMPORTED"
+    assert second["status"] == "DUPLICATE"
     assert second["snapshot_id"] == first["snapshot_id"]
+
+
+def test_archive_travels_through_the_api(collected_snapshot, tmp_path) -> None:
+    """Круг через браузер: скачать одним файлом и загрузить одним файлом.
+
+    Перенос существует ради объёмов, которые не проходят через репозиторий, и
+    дорога у них одна — файл через браузер. Проверяется именно она, а не
+    внутренние функции: между ними и пользователем стоят маршрут, multipart и
+    временный файл, и ломается обычно там.
+    """
+    from fastapi.testclient import TestClient
+
+    from tmo.api.app import create_app
+
+    client = TestClient(create_app())
+
+    response = client.get(f"/api/v1/market-snapshots/{DAY.isoformat()}/archive?level=evidence")
+    assert response.status_code == 200, response.text
+    assert "tmo-snapshot-2026-08-09-v1-evidence.tar" in response.headers["content-disposition"]
+    archive = response.content
+    assert len(archive) > 1000
+
+    uploaded = client.post(
+        "/api/v1/market-snapshots/archive",
+        files={"file": ("snapshot.tar", archive, "application/x-tar")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    assert uploaded.json()["status"] == "IMPORTED"
+    assert uploaded.json()["version_label"] == "v2"
+
+    # Отчёт об успехе — не доказательство записи. Зависимость `db_session`
+    # закрывает сессию, но не фиксирует её, и загрузка на ней откатывалась бы
+    # молча, отвечая ровно теми же двумя строками выше.
+    listed = client.get("/api/v1/market-snapshots").json()["snapshots"]
+    versions = [v["label"] for item in listed for v in item["versions"]]
+    assert "v2" in versions, "загруженный снимок не доехал до базы"
+
+
+def test_upload_of_a_known_snapshot_asks_instead_of_deciding(collected_snapshot, tmp_path) -> None:
+    """Совпадение — не ошибка и не повод молча удвоить версии.
+
+    Принести один и тот же архив дважды — обычное дело. Загрузка сообщает, что
+    такой снимок уже есть, и ждёт решения; согласие выражается повтором с
+    ``force``, и копия ложится следующей версией.
+    """
+    from fastapi.testclient import TestClient
+
+    from tmo.api.app import create_app
+
+    client = TestClient(create_app())
+    archive = client.get(f"/api/v1/market-snapshots/{DAY.isoformat()}/archive").content
+
+    first = client.post(
+        "/api/v1/market-snapshots/archive",
+        files={"file": ("snapshot.tar", archive, "application/x-tar")},
+    ).json()
+    assert first["status"] == "IMPORTED"
+    assert first["version_label"] == "v2"
+
+    again = client.post(
+        "/api/v1/market-snapshots/archive",
+        files={"file": ("snapshot.tar", archive, "application/x-tar")},
+    ).json()
+    assert again["status"] == "DUPLICATE"
+    assert again["version_label"] == "v2", "должен показать, что уже лежит"
+
+    forced = client.post(
+        "/api/v1/market-snapshots/archive?force=true",
+        files={"file": ("snapshot.tar", archive, "application/x-tar")},
+    ).json()
+    assert forced["status"] == "IMPORTED"
+    assert forced["version_label"] == "v3", "согласие даёт следующую версию"
+
+
+def test_archive_with_a_path_outside_its_own_directory_is_refused(tmp_path) -> None:
+    """Архив приходит извне, и распаковка чужого tar — запись по чужим путям.
+
+    ``../`` в имени участника уводит запись куда угодно. Проверка обязана быть
+    до распаковки, а не после: после уже поздно.
+    """
+    import tarfile
+
+    from tmo.services.transfer import ImportRefused, extract_archive
+
+    payload = tmp_path / "evil.txt"
+    payload.write_text("вредно", encoding="utf-8")
+    archive = tmp_path / "evil.tar"
+    with tarfile.open(archive, "w") as handle:
+        handle.add(payload, arcname="../../escaped.txt")
+
+    with pytest.raises(ImportRefused, match="выходит за каталог"):
+        extract_archive(archive, tmp_path / "unpack")
 
 
 def test_corrupted_bundle_is_refused(collected_snapshot, tmp_path) -> None:

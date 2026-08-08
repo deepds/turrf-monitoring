@@ -60,6 +60,16 @@ SHOWCASE = "showcase"
 EVIDENCE = "evidence"
 
 
+class ImportRefused(Exception):
+    """Загрузка невозможна и продолжать нельзя.
+
+    Отдельный тип, потому что все причины отказа здесь — про достоверность, а не
+    про технику: чужая версия формата, отсутствующая методика, испорченный файл,
+    путь, уводящий за пределы каталога. Подставить умолчание в любом из этих
+    случаев значит получить на витрине цифры, которые никто не считал.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class TableSpec:
     """Таблица в выгрузке и её место в графе зависимостей.
@@ -275,14 +285,96 @@ def export_snapshot(
 # --------------------------------------------------------------------------- #
 
 
-class ImportRefused(Exception):
-    """Загрузка невозможна и продолжать нельзя.
+def archive_snapshot(
+    session: Session,
+    snapshot_id: int,
+    destination: Path,
+    *,
+    level: str = EVIDENCE,
+    origin_stand: str = "",
+) -> tuple[Path, dict[str, Any]]:
+    """Выгружает снимок одним файлом ``.tar.gz``.
 
-    Отдельный тип, потому что все причины отказа здесь — про достоверность, а не
-    про технику: чужая версия формата, отсутствующая методика, испорченный файл.
-    Подставить умолчание в любом из этих случаев значит получить на витрине
-    цифры, которые никто не считал.
+    Каталог из десятка файлов удобен машине и неудобен человеку: перенос идёт
+    через браузер — скачать один файл и загрузить один файл. Внутри тот же
+    формат, что и у каталожной выгрузки, поэтому обе дороги ведут в одну
+    загрузку.
+
+    Файлы внутри уже сжаты, поэтому tar пишется без второго сжатия: gzip
+    поверх gzip даёт минус проценты и плюс минуты.
     """
+    import tarfile
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="tmo-archive-") as workdir:
+        bundle = Path(workdir) / "bundle"
+        manifest = export_snapshot(
+            session, snapshot_id, bundle, level=level, origin_stand=origin_stand
+        )
+        snapshot_date = manifest["snapshot"]["snapshot_date"]
+        attempt = manifest["snapshot"]["attempt_no"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(destination, "w") as archive:
+            for path in sorted(bundle.iterdir()):
+                archive.add(path, arcname=f"{snapshot_date}-v{attempt}/{path.name}")
+
+    logger.info(
+        "Снимок упакован",
+        snapshot_id=snapshot_id,
+        bundle_level=level,
+        bytes=destination.stat().st_size,
+    )
+    return destination, manifest
+
+
+def archive_name(snapshot_date: date | str, attempt_no: int, level: str) -> str:
+    """Имя файла архива. Дата, версия и уровень — прямо в имени.
+
+    Файл переезжает через браузер и папку «Загрузки», где теряется всякий
+    контекст. Имя — единственное, что доедет вместе с ним.
+    """
+    day = snapshot_date if isinstance(snapshot_date, str) else snapshot_date.isoformat()
+    return f"tmo-snapshot-{day}-v{attempt_no}-{level}.tar"
+
+
+def extract_archive(archive: Path, destination: Path) -> Path:
+    """Распаковывает архив и возвращает каталог с ``manifest.json``.
+
+    Архив приходит из браузера, то есть извне. Распаковка чужого tar — это
+    запись по путям, которые задал автор архива: ``../`` в имени участника
+    уводит запись куда угодно, символьная ссылка — тем более. Поэтому
+    применяется фильтр ``data`` и проверка того, что каждый участник остаётся
+    внутри каталога назначения.
+    """
+    import tarfile
+
+    destination.mkdir(parents=True, exist_ok=True)
+    resolved = destination.resolve()
+
+    with tarfile.open(archive, "r:*") as handle:
+        for member in handle.getmembers():
+            if member.islnk() or member.issym():
+                raise ImportRefused(f"Ссылки в архиве не допускаются: {member.name}")
+            target = (resolved / member.name).resolve()
+            if not target.is_relative_to(resolved):
+                raise ImportRefused(f"Путь участника выходит за каталог: {member.name}")
+        handle.extractall(resolved, filter="data")
+
+    manifests = list(resolved.rglob("manifest.json"))
+    if not manifests:
+        raise ImportRefused("В архиве нет manifest.json — это не выгрузка снимка")
+    return manifests[0].parent
+
+
+def import_archive(
+    session: Session, archive: Path, *, force: bool = False, batch_size: int = 5000
+) -> dict[str, Any]:
+    """Загружает снимок из одного файла ``.tar.gz``."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="tmo-import-") as workdir:
+        bundle = extract_archive(archive, Path(workdir))
+        return import_snapshot(session, bundle, force=force, batch_size=batch_size)
 
 
 def _read_table(path: Path) -> Iterator[dict[str, Any]]:
@@ -357,7 +449,7 @@ def _remap_parents(
         row[column] = remapped
 
 
-def _imported_key(original: str, content_digest: str) -> str:
+def _imported_key(original: str, content_digest: str, attempt_no: int) -> str:
     """Ключ идемпотентности загруженной попытки.
 
     ``idempotency_key`` уникален по всей базе, а собирается из даты снимка,
@@ -366,15 +458,15 @@ def _imported_key(original: str, content_digest: str) -> str:
     одинаковые ключи, поэтому загрузка снимка с соседнего стенда упирается в
     уникальность даже на чистой базе.
 
-    Пространство имён — отпечаток выгрузки. Ключ остаётся детерминированным:
-    тот же файл даёт те же ключи, и повторная загрузка по-прежнему узнаётся —
-    но уже по ``source_digest``, до всякой записи.
+    Пространство имён — отпечаток выгрузки **и номер попытки**. Отпечатка
+    одного мало: один и тот же архив разрешено загрузить дважды, и обе копии
+    получили бы одинаковые ключи. Номер попытки у копий разный по построению.
 
     Смысл ключа при этом не теряется: он защищает от повторной записи попытки
     внутри одного прогона, а прогон, породивший эти попытки, шёл на другом
     стенде и здесь не повторится.
     """
-    prefix = f"i{content_digest[:7]}"
+    prefix = f"i{content_digest[:6]}a{attempt_no}"
     # Колонка — 64 символа. Обрезается исходный ключ, а не префикс: без
     # префикса пропадает вся защита, а исходный ключ и так лишь ссылка на
     # прогон, которого на этом стенде нет.
@@ -398,14 +490,25 @@ def _next_attempt_no(session: Session, snapshot_date: date) -> int:
 
 def already_imported(session: Session, content_digest: str) -> models.MarketSnapshot | None:
     return session.scalars(
-        select(models.MarketSnapshot).where(
-            models.MarketSnapshot.source_digest == content_digest
-        )
+        select(models.MarketSnapshot)
+        .where(models.MarketSnapshot.source_digest == content_digest)
+        .order_by(models.MarketSnapshot.attempt_no.desc())
     ).first()
 
 
-def import_snapshot(session: Session, source: Path, *, batch_size: int = 5000) -> dict[str, Any]:
-    """Загружает выгруженный снимок, переназначая все идентификаторы."""
+def import_snapshot(
+    session: Session, source: Path, *, batch_size: int = 5000, force: bool = False
+) -> dict[str, Any]:
+    """Загружает выгруженный снимок, переназначая все идентификаторы.
+
+    ``force`` разрешает загрузить снимок, который здесь уже есть. Без него
+    повторная загрузка того же файла возвращает ``DUPLICATE`` и не пишет
+    ничего: принести один и тот же архив дважды — обычное дело, и молча
+    удвоить версии значило бы наказать за неосторожность.
+
+    Решение принимает человек, а не код: с ``force`` копия ложится следующей
+    версией той же даты — v2, v3, — и обе остаются видимыми.
+    """
     manifest_path = source / "manifest.json"
     if not manifest_path.exists():
         raise ImportRefused(f"В {source} нет manifest.json — это не выгрузка снимка")
@@ -427,13 +530,16 @@ def import_snapshot(session: Session, source: Path, *, batch_size: int = 5000) -
         )
 
     existing = already_imported(session, manifest["content_digest"])
-    if existing is not None:
+    if existing is not None and not force:
         logger.info("Снимок уже загружен", snapshot_id=existing.id)
         return {
-            "status": "ALREADY_IMPORTED",
+            "status": "DUPLICATE",
             "snapshot_id": existing.id,
             "snapshot_date": existing.snapshot_date.isoformat(),
             "attempt_no": existing.attempt_no,
+            "version_label": f"v{existing.attempt_no}",
+            "imported_at": existing.imported_at.isoformat() if existing.imported_at else None,
+            "origin_stand": existing.origin_stand,
         }
 
     level = manifest.get("level", SHOWCASE)
@@ -466,7 +572,7 @@ def import_snapshot(session: Session, source: Path, *, batch_size: int = 5000) -
                 _coerce_temporal(row, spec.model)
                 if spec.name == "source_attempts":
                     row["idempotency_key"] = _imported_key(
-                        row["idempotency_key"], manifest["content_digest"]
+                        row["idempotency_key"], manifest["content_digest"], attempt_no
                     )
                 if spec.name == "market_snapshots":
                     row["attempt_no"] = attempt_no
