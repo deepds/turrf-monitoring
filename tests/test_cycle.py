@@ -239,6 +239,54 @@ def test_cycle_closes_inside_its_own_calendar_day() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Восстановление после смерти шага
+# --------------------------------------------------------------------------- #
+
+
+def test_orphaned_jobs_return_to_plan_when_a_step_takes_over(session) -> None:
+    """Наблюдения убитого шага возвращаются в план, а не числятся в работе.
+
+    Воркер, убитый посреди пачки, оставляет отметку ``RUNNING`` навсегда. Дальше
+    это ломает не сбор, а лечение, и ломает круговым образом: проверка живости
+    видит «в работе есть, завершений нет», autoheal перезапускает воркер,
+    перезапуск роняет текущую пачку и добавляет новых сирот. На meduza
+    08.08.2026 стенд провёл в этом круге полчаса, не записав ни одной попытки.
+    """
+    from tmo.tasks.collection import reclaim_stale_jobs
+
+    snapshot = _snapshot(session)
+    _job(session, snapshot, "AIR", status=JobStatus.RUNNING, touched=True)
+    _job(session, snapshot, "AIR", status=JobStatus.DISPATCHED, touched=True)
+    done = _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
+
+    assert reclaim_stale_jobs(session, snapshot.id) == 2
+    session.flush()
+
+    statuses = [job.status for job in session.query(models.CollectionJob).all()]
+    assert statuses.count(JobStatus.PLANNED) == 2
+    assert done.status == JobStatus.SUCCESS, "закрытое наблюдение трогать нельзя"
+
+
+def test_stall_threshold_outlives_a_step_lease() -> None:
+    """Порог застоя обязан пережить срок аренды.
+
+    Пока аренда умершего шага не истекла, новый шаг не начнётся и завершений не
+    будет. Порог, равный сроку аренды, объявляет застоем штатное восстановление
+    — и лечение начинает драться с ним.
+    """
+    from tmo.core.config import get_settings
+    from tmo.tasks.lease import LEASE_TTL_SECONDS
+
+    threshold = get_settings().stall_threshold_minutes * 60
+    batch = get_settings().batch_soft_budget_seconds
+
+    assert threshold > LEASE_TTL_SECONDS + batch, (
+        f"порог застоя {threshold} с не переживает аренду {LEASE_TTL_SECONDS} с "
+        f"плюс пачку {batch} с"
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Витрина под новую модель
 # --------------------------------------------------------------------------- #
 

@@ -52,6 +52,40 @@ def _settings():
     return get_settings()
 
 
+def reclaim_stale_jobs(session, snapshot_id: int) -> int:
+    """Возвращает в план наблюдения, брошенные умершим шагом.
+
+    Наблюдение помечается ``RUNNING`` на время пачки и снимается с этой отметки
+    при записи. Воркер, убитый посреди пачки, оставляет отметку навсегда: пачка
+    не запишется никогда, а наблюдение числится выполняющимся.
+
+    Дальше это ломает не сбор, а **лечение** — и ломает круговым образом.
+    Проверка живости считает нездоровьем «в работе есть, завершений нет»;
+    осиротевшие отметки дают ей ровно эту картину, autoheal перезапускает
+    воркер, перезапуск роняет текущую пачку и добавляет новых сирот. Стенд
+    meduza 08.08.2026 вошёл в этот круг и за полчаса не записал ни одной
+    попытки: каждый перезапуск приходился на момент, когда пачка собиралась
+    записаться.
+
+    Вызывается под арендой шага. Аренда и делает операцию безопасной: пока она
+    наша, другого сбора по этому снимку нет, и всё, что числится выполняющимся,
+    — заведомо чужое наследство.
+    """
+    from sqlalchemy import update as sa_update
+
+    result = session.execute(
+        sa_update(models.CollectionJob)
+        .where(
+            models.CollectionJob.snapshot_id == snapshot_id,
+            models.CollectionJob.status.in_(
+                [JobStatus.RUNNING.value, JobStatus.DISPATCHED.value]
+            ),
+        )
+        .values(status=JobStatus.PLANNED.value)
+    )
+    return int(result.rowcount or 0)
+
+
 def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | None:
     snapshot_date = snapshot_date or snapshot_date_for()
     return session.scalar(
@@ -177,6 +211,13 @@ def _collect_family(family: str, target: date, held: lease.Lease) -> dict[str, A
         if snapshot_id is None:
             creation = create_snapshot(session, snapshot_date=target)
             snapshot_id = creation.snapshot_id
+        reclaimed = reclaim_stale_jobs(session, snapshot_id)
+        if reclaimed:
+            logger.warning(
+                "Наблюдения, брошенные умершим шагом, возвращены в план",
+                reclaimed=reclaimed,
+                family=family,
+            )
         # Уже закрытые наблюдения повторному сбору не подлежат: обращения к
         # источнику потрачены бы впустую, а их результат всё равно отсекается
         # по ключу идемпотентности при записи. Дыры (FAILED) остаются в выборке
@@ -282,6 +323,12 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
         with session_scope() as session:
             snapshot = session.get(models.MarketSnapshot, snapshot_id)
             snapshot.status = SnapshotStatus.RECOVERING
+            reclaimed = reclaim_stale_jobs(session, snapshot_id)
+            if reclaimed:
+                logger.warning(
+                    "Наблюдения, брошенные умершим шагом, возвращены в план",
+                    reclaimed=reclaimed,
+                )
 
         totals = {"rounds": 0, "attempts": 0, "offers": 0}
         with log_context(snapshot_id=snapshot_id):
