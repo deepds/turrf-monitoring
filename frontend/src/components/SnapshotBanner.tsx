@@ -55,28 +55,23 @@ function TodayProgress({ today }: { today: CycleProgress }) {
               ),
             )}
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              собрано наблюдений: {today.answered_count} из {today.planned}
+              собрано: {today.answered_count} из {today.planned}
             </Typography.Text>
             <Typography.Text
               type={today.holes > 0 ? 'warning' : 'secondary'}
               style={{ fontSize: 12 }}
             >
-              наблюдений с пропуском: {today.holes}
+              пропусков: {today.holes}
             </Typography.Text>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               до рубежа суток: {Math.floor(today.minutes_left / 60)} ч {today.minutes_left % 60} мин
             </Typography.Text>
           </Space>
-          {/* Размерность названа прямо. Числа порядка «436 из 15 840» без
-              единицы измерения читаются как что угодно — от запросов к API до
-              строк витрины, — а это клетки матрицы наблюдений, и одна клетка
-              обычно стоит нескольких обращений к источнику. */}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Наблюдение — одна клетка матрицы: маршрут или город, даты и категория,
-            для которых нужна цена. Проценты — доля наблюдений, получивших ответ.
-            Пропуск — наблюдение, к которому сбор подходил и ответа не получил; оно
-            переспрашивается, пока не даст результат. Те, до которых очередь ещё не
-            дошла, в пропуски не входят.
+            Проценты — доля наблюдений, получивших ответ. Пропуски — те, к которым
+            сбор уже подходил и ответа не получил; они переспрашиваются, пока не
+            дадут результат. Наблюдения, до которых очередь ещё не дошла, в
+            пропуски не входят.
           </Typography.Text>
         </Space>
       }
