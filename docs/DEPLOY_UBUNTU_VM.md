@@ -8,6 +8,22 @@
 
 Все команды — от `root` (`sudo su`) либо с `sudo` перед каждой.
 
+**`docker compose` работает только из каталога проекта.** Запущенный откуда-то
+ещё, он отвечает `no configuration file provided: not found` — это не поломка
+стека, а отсутствие `docker-compose.yml` в текущем каталоге. Поэтому каждая
+команда ниже начинается с перехода в каталог: блоки рассчитаны на копирование
+поодиночке, а не целиком.
+
+Помните и о том, что после `sudo su` домашний каталог — `/root`, а не тот, из
+которого вы вошли. Найти проект:
+
+```bash
+ls -d /root/turrf_monitoring /home/*/turrf_monitoring 2>/dev/null
+```
+
+Дальше в тексте он обозначен как `~/turrf_monitoring`; подставьте фактический
+путь, если он иной.
+
 ---
 
 ## Предупреждение о данных первой версии
@@ -158,11 +174,11 @@ YMLEOF
 ## Шаг 9. Собрать и запустить
 
 ```bash
-cd ~/turrf_monitoring
-docker compose build
-docker compose up -d
-sleep 40
-docker compose ps
+cd ~/turrf_monitoring && docker compose build
+```
+
+```bash
+cd ~/turrf_monitoring && docker compose up -d && sleep 40 && docker compose ps
 ```
 
 Ожидается восемь контейнеров, семь из них `healthy` (у `beat` проверки нет).
@@ -172,8 +188,14 @@ docker compose ps
 
 ```bash
 curl -s http://localhost:8091/api/v1/health; echo
+```
+
+```bash
 curl -s -o /dev/null -w 'UI %{http_code}\n' http://localhost:8090/
-docker compose exec api python -m tmo.cli check-sources
+```
+
+```bash
+cd ~/turrf_monitoring && docker compose exec api python -m tmo.cli check-sources
 ```
 
 `check-sources` — единственная команда, ходящая в сеть. Оба источника должны
@@ -198,23 +220,19 @@ docker compose exec api python -m tmo.cli check-sources
 Первый запуск можно не ждать до полуночи:
 
 ```bash
-docker compose exec worker-service python -c "
-from tmo.tasks.collection import advance_snapshot
-print(advance_snapshot.apply().get())
-"
+cd ~/turrf_monitoring && docker compose exec worker-service python -c "from tmo.tasks.collection import advance_snapshot; print(advance_snapshot.apply().get())"
 ```
 
 ## Если нужно остановить сбор
 
 ```bash
-cd ~/turrf_monitoring
-docker compose stop beat worker worker-service
+cd ~/turrf_monitoring && docker compose stop beat worker worker-service
 ```
 
 База и витрина остаются доступными. Обратно:
 
 ```bash
-docker compose start beat worker worker-service
+cd ~/turrf_monitoring && docker compose start beat worker worker-service
 ```
 
 Останавливать надо все три: досбор идёт в очереди `collect`, но диспетчер живёт
@@ -223,10 +241,7 @@ docker compose start beat worker worker-service
 ## Обновление до новой версии
 
 ```bash
-cd ~/turrf_monitoring
-git fetch origin && git reset --hard origin/main
-docker compose build api ui
-docker compose up -d
+cd ~/turrf_monitoring && git fetch origin && git reset --hard origin/main && docker compose build api ui && docker compose up -d
 ```
 
 Перезапуск воркера посреди сбора безопасен: наблюдения, брошенные убитой
@@ -242,24 +257,34 @@ docker compose up -d
 
 ## Диагностика, если сбор не идёт
 
+Что решает диспетчер:
+
 ```bash
-cd ~/turrf_monitoring
+cd ~/turrf_monitoring && docker compose logs worker-service --since 20m | grep advance_snapshot | tail -3
+```
 
-# что решает диспетчер
-docker compose logs worker-service --since 20m | grep advance_snapshot | tail -3
+Чем занят сбор:
 
-# чем занят сбор
-docker compose logs worker --since 30m | tail -20
+```bash
+cd ~/turrf_monitoring && docker compose logs worker --since 30m | tail -20
+```
 
-# состояние цикла
+Состояние цикла (единственная команда, которой каталог не нужен):
+
+```bash
 curl -s http://localhost:8091/api/v1/market-snapshots/current
+```
 
-# кто держит право на сбор
-docker compose exec redis redis-cli KEYS 'tmo:lease:*'
-docker compose exec redis redis-cli TTL 'tmo:lease:collect:'$(date +%F)
+Кто держит право на сбор:
 
-# проверка живости воркера
-docker compose exec worker python -m tmo.tasks.health; echo "код: $?"
+```bash
+cd ~/turrf_monitoring && docker compose exec redis redis-cli KEYS 'tmo:lease:*'
+```
+
+Проверка живости воркера:
+
+```bash
+cd ~/turrf_monitoring && docker compose exec worker python -m tmo.tasks.health; echo "код: $?"
 ```
 
 Две вещи, которые выглядят поломкой и ею не являются:
