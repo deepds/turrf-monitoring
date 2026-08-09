@@ -204,6 +204,47 @@ cd ~/turrf_monitoring && docker compose exec api python -m tmo.cli check-sources
 
 Дашборд: `http://IP_ВМ:8090`, API и OpenAPI: `http://IP_ВМ:8091/docs`.
 
+## Шаг 11. Первичное наполнение витрины
+
+Сразу после развёртывания готовых снимков нет, и витрина пуста: первый закроется
+только в 23:00. Ход текущего сбора виден в плашке сверху, но все экраны с
+цифрами до закрытия снимка пустые.
+
+Чтобы витрина сразу показывала, как она выглядит, соберите демонстрационный
+снимок на **воспроизведённых** ответах. В сеть он не ходит и на живой сбор не
+влияет — дата у него своя.
+
+```bash
+cd ~/turrf_monitoring && docker compose run -d --rm --name tmo-demo api cli demo-snapshot --snapshot-date $(date -d '-4 days' +%F) --horizon 30
+```
+
+Наблюдать за ним:
+
+```bash
+docker logs -f tmo-demo
+```
+
+Занимает около десяти минут: полная матрица из 15 840 наблюдений, расчёт и
+публикация. Запускается **отвязанным** (`run -d`), а не через `exec`: `exec`
+привязан к ssh-сессии, и обрыв связи убил бы прогон на середине.
+
+Готово, когда снимок появится со статусом `READY`:
+
+```bash
+cd ~/turrf_monitoring && docker compose exec -T postgres psql -U tmo -d tmo -c "SELECT snapshot_date, status, is_synthetic, round(coverage_total::numeric,3) FROM market_snapshots ORDER BY id;"
+```
+
+**Витрина пометит эти данные красным баннером «Демонстрационные данные».** Так и
+задумано: синтетика не выдаёт себя за рынок, и снять пометку нельзя ни одной
+настройкой. Когда закроется первый живой снимок, витрина переключится на него
+сама — живой день всегда новее демонстрационного.
+
+Удалить демонстрационный снимок, когда он больше не нужен:
+
+```bash
+cd ~/turrf_monitoring && docker compose exec -T postgres psql -U tmo -d tmo -c "DELETE FROM market_snapshots WHERE is_synthetic;"
+```
+
 ---
 
 ## Что будет дальше само
