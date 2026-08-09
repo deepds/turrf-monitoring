@@ -100,7 +100,9 @@ MAX_BATCH_SIZE = 400
 MIN_BATCH_SIZE = 1
 
 
-def seconds_per_observation(family: str | None) -> float:
+def seconds_per_observation(
+    family: str | None, *, concurrency_override: int | None = None
+) -> float:
     """Ожидаемое время одного наблюдения семейства при текущей рабочей точке.
 
     Источники внутри пачки обходятся последовательно (`runner.execute_batch`),
@@ -121,6 +123,12 @@ def seconds_per_observation(family: str | None) -> float:
     её при отказах источника, и пачка, посчитанная по потолку, при рабочей точке
     вдвое ниже требует вдвое больше времени, чем ей отведено: её хвост целиком
     уходит в ``BUDGET_EXHAUSTED``.
+
+    ``concurrency_override`` нужен там, где одновременность задана извне и не
+    совпадает с найденной регулятором. Досбор идёт на собственной пониженной
+    точке, а размер пачки считался по значению регулятора: в снимке 09.08.2026
+    это дало 103 ``BUDGET_EXHAUSTED`` на 116 обращений — пачку считали под
+    двенадцать потоков, исполняли на двух.
     """
     from tmo.catalog.registry import source_registry
     from tmo.connectors.transport import TRANSPORT_POOL
@@ -133,7 +141,11 @@ def seconds_per_observation(family: str | None) -> float:
     total = 0.0
     for code, cost in costs.items():
         source = registry.get(code)
-        concurrency = TRANSPORT_POOL.current_concurrency(code, source.concurrency)
+        concurrency = (
+            concurrency_override
+            if concurrency_override is not None
+            else TRANSPORT_POOL.current_concurrency(code, source.concurrency)
+        )
         by_concurrency = cost.seconds / max(1, concurrency)
         by_rate = (
             cost.calls / (source.rate_limit_per_minute / 60.0)
@@ -144,10 +156,12 @@ def seconds_per_observation(family: str | None) -> float:
     return total
 
 
-def batch_size_for_family(family: str | None, *, settings: Any = None) -> int:
+def batch_size_for_family(
+    family: str | None, *, settings: Any = None, concurrency_override: int | None = None
+) -> int:
     """Сколько наблюдений семейства укладывается в бюджет одной пачки."""
     settings = settings or get_settings()
-    seconds = seconds_per_observation(family)
+    seconds = seconds_per_observation(family, concurrency_override=concurrency_override)
     if seconds <= 0:
         return settings.batch_size
 
@@ -220,6 +234,7 @@ def collect_jobs(
     family: str | None = None,
     deadline: datetime | None = None,
     on_progress: Callable[[], bool] | None = None,
+    concurrency_override: int | None = None,
 ) -> dict[str, int]:
     """Прогоняет наблюдения пачками. Каждая пачка — свои три фазы.
 
@@ -261,7 +276,9 @@ def collect_jobs(
             totals["deadline_reached"] = 1
             break
 
-        size = batch_size or batch_size_for_family(family, settings=settings)
+        size = batch_size or batch_size_for_family(
+            family, settings=settings, concurrency_override=concurrency_override
+        )
         chunk = job_ids[start : start + size]
         totals["batch_size"] = size
         report = run_batch(

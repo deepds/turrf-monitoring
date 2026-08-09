@@ -381,6 +381,10 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
                         execution_scope="RECOVERY",
                         attempt_salt=f"recovery-{now_utc().strftime('%H%M%S')}-{attempt}",
                         family=family,
+                        # Та же одновременность, что применит исполнение. Иначе
+                        # пачку считают под значение регулятора, а исполняют на
+                        # пониженной точке досбора — и хвост уходит в бюджет.
+                        concurrency_override=settings.recovery_concurrency,
                         deadline=cycle.day_deadline(target),
                         on_progress=held.renew,
                     )
