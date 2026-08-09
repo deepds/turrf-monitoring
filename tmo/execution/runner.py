@@ -223,6 +223,11 @@ def execute_batch(
             growth_after=settings.concurrency_growth_after,
         )
         workers = max(1, min(governor.current, len(source_items)))
+        # Досбор идёт по наблюдениям, которые источник уже не отдал: они тяжелее
+        # среднего, и рабочая точка первичного сбора на них не годится. Потолок
+        # опускается, а не нащупывается заново — состав пачки известен заранее.
+        if source_items[0].execution_scope == "RECOVERY":
+            workers = max(1, min(workers, settings.recovery_concurrency))
 
         # Цепь уже разомкнута — спрашивать бессмысленно и вредно: она остывает
         # 900 секунд, а пачка исполняется минуты. Прожигание остатка дало бы

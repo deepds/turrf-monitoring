@@ -30,7 +30,6 @@ from tmo.db import models
 from tmo.db.session import session_scope
 from tmo.services import cycle
 from tmo.services.calculation import calculate_snapshot as calculate_service
-from tmo.services.coverage import find_holes
 from tmo.services.pipeline import collect_jobs
 from tmo.services.publication import finalize_snapshot as finalize_service
 from tmo.services.snapshot import create_snapshot
@@ -86,6 +85,32 @@ def reclaim_stale_jobs(session, snapshot_id: int) -> int:
     return int(result.rowcount or 0)
 
 
+def _holes_by_family(
+    session, snapshot_id: int, *, max_attempts: int | None = None
+) -> dict[str, list[int]]:
+    """Пропуски, разложенные по семействам, дорогие первыми.
+
+    Порядок важен: досбор упирается в рубеж суток, и семейство, до которого не
+    дошли, остаётся непереспрошенным. Дорогое первым — потому что именно оно
+    определяет, пройдёт ли снимок пороги: дешёвое успеет в любом случае.
+    """
+    from tmo.services.pipeline import seconds_per_observation
+
+    query = select(models.CollectionJob.id, models.CollectionJob.family).where(
+        models.CollectionJob.snapshot_id == snapshot_id,
+        models.CollectionJob.status.in_([status.value for status in JobStatus if status.is_hole]),
+    )
+    if max_attempts is not None:
+        query = query.where(models.CollectionJob.retry_count < max_attempts)
+
+    grouped: dict[str, list[int]] = {}
+    for job_id, family in session.execute(query.order_by(models.CollectionJob.id)):
+        grouped.setdefault(str(family), []).append(job_id)
+    return dict(
+        sorted(grouped.items(), key=lambda item: seconds_per_observation(item[0]), reverse=True)
+    )
+
+
 def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | None:
     snapshot_date = snapshot_date or snapshot_date_for()
     return session.scalar(
@@ -122,8 +147,8 @@ def advance_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
 
     lease_name = {
         cycle.STEP_OPEN: f"open:{target.isoformat()}",
-        cycle.STEP_COLLECT: f"collect:{target.isoformat()}:{step.family}",
-        cycle.STEP_RECOVER: f"recover:{step.snapshot_id}",
+        cycle.STEP_COLLECT: lease.collection_lease(target.isoformat()),
+        cycle.STEP_RECOVER: lease.collection_lease(target.isoformat()),
         cycle.STEP_CLOSE: f"close:{step.snapshot_id}",
     }[step.step]
 
@@ -198,7 +223,7 @@ def collect_family(self, family: str, snapshot_date: str | None = None) -> dict[
     на источнике, а не удвоенная скорость.
     """
     target = date.fromisoformat(snapshot_date) if snapshot_date else snapshot_date_for()
-    with lease.acquire(f"collect:{target.isoformat()}:{family}") as held:
+    with lease.acquire(lease.collection_lease(target.isoformat())) as held:
         if held is None:
             logger.info("Сбор семейства уже идёт: шаг пропущен", family=family)
             return {"status": "ALREADY_RUNNING", "family": family}
@@ -315,7 +340,7 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
         target = snapshot.snapshot_date
 
-    with lease.acquire(f"recover:{snapshot_id}") as held:
+    with lease.acquire(lease.collection_lease(target.isoformat())) as held:
         if held is None:
             logger.info("Досбор уже идёт: шаг пропущен", snapshot_id=snapshot_id)
             return {"status": "ALREADY_RUNNING", "snapshot_id": snapshot_id}
@@ -334,22 +359,34 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
         with log_context(snapshot_id=snapshot_id):
             for attempt in range(1, rounds + 1):
                 with session_scope() as session:
-                    holes = find_holes(
+                    holes = _holes_by_family(
                         session, snapshot_id, max_attempts=settings.max_job_attempts
                     )
                 if not holes:
                     break
-                logger.info("Досбор", round=attempt, holes=len(holes))
-                result = collect_jobs(
-                    holes,
-                    execution_scope="RECOVERY",
-                    attempt_salt=f"recovery-{now_utc().strftime('%H%M%S')}-{attempt}",
-                    deadline=cycle.day_deadline(target),
-                    on_progress=held.renew,
+                logger.info(
+                    "Досбор",
+                    round=attempt,
+                    holes=sum(len(ids) for ids in holes.values()),
+                    by_family={family: len(ids) for family, ids in holes.items()},
                 )
+                # По семействам, а не общим списком. Без семейства размер пачки
+                # считать не от чего, и досбор брал плоское умолчание в 40
+                # наблюдений — при стоимости авианаблюдения в досборе это в
+                # разы больше бюджета, то есть хвост пачки гарантированно
+                # уходил в BUDGET_EXHAUSTED.
+                for family, job_ids in holes.items():
+                    result = collect_jobs(
+                        job_ids,
+                        execution_scope="RECOVERY",
+                        attempt_salt=f"recovery-{now_utc().strftime('%H%M%S')}-{attempt}",
+                        family=family,
+                        deadline=cycle.day_deadline(target),
+                        on_progress=held.renew,
+                    )
+                    totals["attempts"] += result["attempts"]
+                    totals["offers"] += result["offers"]
                 totals["rounds"] = attempt
-                totals["attempts"] += result["attempts"]
-                totals["offers"] += result["offers"]
 
         with session_scope() as session:
             snapshot = session.get(models.MarketSnapshot, snapshot_id)

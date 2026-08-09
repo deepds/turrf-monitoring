@@ -163,20 +163,49 @@ class CircuitBreaker:
     чтобы досбор понимал, что причина на нашей стороне и к утру пройдёт.
     """
 
-    def __init__(self, failure_threshold: int, reset_seconds: int) -> None:
+    def __init__(
+        self, failure_threshold: int, reset_seconds: int, *, max_reset_seconds: int | None = None
+    ) -> None:
         self.failure_threshold = failure_threshold
         self.reset_seconds = reset_seconds
+        #: Потолок остывания. Без него удвоение однажды уводит паузу в часы.
+        self.max_reset_seconds = max_reset_seconds or reset_seconds * 8
         self._failures = 0
         self._opened_at: float | None = None
         self._first_cause: str | None = None
+        #: Сколько раз цепь размыкалась подряд, без успеха между размыканиями.
+        self._consecutive_opens = 0
         self._lock = threading.Lock()
+
+    @property
+    def current_reset_seconds(self) -> int:
+        """Сколько ждать остывания сейчас.
+
+        Пауза удваивается с каждым размыканием подряд. Фиксированные пять минут
+        исходили из того, что размыкание — событие редкое; в досборе 09.08.2026
+        цикл «размыкание → пауза 300 с → размыкание» повторялся раз за разом и
+        съедал четверть времени. Повторное размыкание означает ровно одно: пяти
+        минут не хватило, и ждать столько же второй раз — значит не сделать
+        вывода из первого.
+
+        Счётчик сбрасывается первым же успешным обращением: источник ожил, и
+        наказывать его за прошлое незачем.
+        """
+        with self._lock:
+            return self._current_reset_locked()
+
+    def _current_reset_locked(self) -> int:
+        if self._consecutive_opens <= 1:
+            return self.reset_seconds
+        grown = self.reset_seconds * (2 ** (self._consecutive_opens - 1))
+        return int(min(self.max_reset_seconds, grown))
 
     @property
     def is_open(self) -> bool:
         with self._lock:
             if self._opened_at is None:
                 return False
-            if time.monotonic() - self._opened_at >= self.reset_seconds:
+            if time.monotonic() - self._opened_at >= self._current_reset_locked():
                 self._opened_at = None
                 self._failures = 0
                 self._first_cause = None
@@ -188,6 +217,7 @@ class CircuitBreaker:
             self._failures = 0
             self._opened_at = None
             self._first_cause = None
+            self._consecutive_opens = 0
 
     def record_failure(self, cause: Exception | None = None) -> None:
         """Считает отказ и, при переполнении, размыкает цепь.
@@ -203,10 +233,12 @@ class CircuitBreaker:
             self._failures += 1
             if self._failures >= self.failure_threshold and self._opened_at is None:
                 self._opened_at = time.monotonic()
+                self._consecutive_opens += 1
                 logger.error(
                     "Размыкатель цепи разомкнут",
                     failures=self._failures,
-                    reset_seconds=self.reset_seconds,
+                    reset_seconds=self._current_reset_locked(),
+                    consecutive_opens=self._consecutive_opens,
                     first_cause=self._first_cause,
                     last_cause=f"{type(cause).__name__}: {cause}"[:400] if cause else None,
                 )
@@ -431,10 +463,19 @@ class TransportPool:
                 self._limiters[source_code] = RateLimiter(per_minute)
             return self._limiters[source_code]
 
-    def circuit(self, source_code: str, threshold: int, reset_seconds: int) -> CircuitBreaker:
+    def circuit(
+        self,
+        source_code: str,
+        threshold: int,
+        reset_seconds: int,
+        *,
+        max_reset_seconds: int | None = None,
+    ) -> CircuitBreaker:
         with self._lock:
             if source_code not in self._circuits:
-                self._circuits[source_code] = CircuitBreaker(threshold, reset_seconds)
+                self._circuits[source_code] = CircuitBreaker(
+                    threshold, reset_seconds, max_reset_seconds=max_reset_seconds
+                )
             return self._circuits[source_code]
 
     def governor(

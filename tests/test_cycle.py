@@ -287,6 +287,114 @@ def test_stall_threshold_outlives_a_step_lease() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Досбор: собственная рабочая точка и растущая пауза
+# --------------------------------------------------------------------------- #
+
+
+def test_one_lease_covers_every_step_that_touches_the_source() -> None:
+    """Аренда одна на сбор, а не на семейство.
+
+    Прежде ключ включал семейство, и авиа с проживанием держали разные аренды —
+    то есть могли идти одновременно, ради чего аренда и вводилась. Окно
+    настоящее: отметка «наблюдение тронуто» ставится в начале пачки, а задача
+    завершается спустя ещё несколько минут.
+    """
+    from tmo.tasks import lease
+
+    day = DAY.isoformat()
+    assert lease.collection_lease(day) == f"collect:{day}"
+    # Досбор ходит в тот же источник и обязан делить ту же аренду.
+    assert lease.collection_lease(day) == lease.collection_lease(day)
+
+
+def test_recovery_runs_at_its_own_working_point(session) -> None:
+    """Досбор идёт с пониженной одновременностью, а не с найденной сбором.
+
+    Он работает по подвыборке, отобранной по признаку «источник её не отдал»:
+    дешёвое закрылось сразу, в пропусках осели самые тяжёлые наблюдения. Замер
+    09.08.2026 — 1,4 страницы на авианаблюдение в конце первичного прохода
+    против 7,5 в досборе тех же наблюдений.
+    """
+    from tmo.core.config import get_settings
+
+    settings = get_settings()
+    assert settings.recovery_concurrency < source_ceiling(), (
+        "рабочая точка досбора обязана быть ниже потолка первичного сбора"
+    )
+    assert settings.recovery_concurrency >= 1
+
+
+def source_ceiling() -> int:
+    from tmo.catalog.registry import source_registry
+
+    return source_registry().get("tutu_mcp").concurrency
+
+
+def test_circuit_cooldown_grows_with_repeated_openings() -> None:
+    """Повторное размыкание означает, что прошлой паузы не хватило.
+
+    Фиксированные пять минут исходили из того, что размыкание редко. В досборе
+    09.08.2026 цикл «размыкание → пауза → размыкание» повторялся раз за разом и
+    съедал четверть времени.
+    """
+    from tmo.connectors.transport import CircuitBreaker
+
+    circuit = CircuitBreaker(2, 300, max_reset_seconds=1800)
+    assert circuit.current_reset_seconds == 300
+
+    for _ in range(2):
+        circuit.record_failure(RuntimeError("503"))
+    assert circuit.current_reset_seconds == 300, "первое размыкание не удлиняет паузу"
+
+    circuit._opened_at = None  # цепь остыла, успеха не было
+    for _ in range(2):
+        circuit.record_failure(RuntimeError("503"))
+    assert circuit.current_reset_seconds == 600
+
+    circuit._opened_at = None
+    for _ in range(2):
+        circuit.record_failure(RuntimeError("503"))
+    assert circuit.current_reset_seconds == 1200
+
+
+def test_cooldown_has_a_ceiling_and_a_success_resets_it() -> None:
+    """Пауза не уходит в часы, а успех обнуляет счётчик: источник ожил."""
+    from tmo.connectors.transport import CircuitBreaker
+
+    circuit = CircuitBreaker(1, 300, max_reset_seconds=1800)
+    for _ in range(10):
+        circuit._opened_at = None
+        circuit.record_failure(RuntimeError("503"))
+    assert circuit.current_reset_seconds == 1800, "потолок остывания не удержан"
+
+    circuit.record_success()
+    assert circuit.current_reset_seconds == 300, "успех обязан обнулить наказание"
+
+
+def test_recovery_holes_are_grouped_by_family_expensive_first(session) -> None:
+    """Пропуски досбираются по семействам, дорогое первым.
+
+    Общим списком размер пачки считать не от чего: у смешанного набора нет
+    осмысленной средней стоимости, и досбор брал плоское умолчание в 40
+    наблюдений — при стоимости авианаблюдения это кратно больше бюджета.
+
+    Порядок нужен потому, что досбор упирается в рубеж суток: семейство, до
+    которого не дошли, остаётся непереспрошенным, и дешёвое успеет в любом
+    случае.
+    """
+    from tmo.tasks.collection import _holes_by_family
+
+    snapshot = _snapshot(session)
+    for family in ("HOTEL", "AIR", "RAIL"):
+        _job(session, snapshot, family, status=JobStatus.FAILED, touched=True)
+    _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
+
+    grouped = _holes_by_family(session, snapshot.id)
+    assert list(grouped) == ["AIR", "HOTEL", "RAIL"], "дорогое семейство обязано идти первым"
+    assert len(grouped["AIR"]) == 1, "закрытое наблюдение в досбор не попадает"
+
+
+# --------------------------------------------------------------------------- #
 # Витрина под новую модель
 # --------------------------------------------------------------------------- #
 

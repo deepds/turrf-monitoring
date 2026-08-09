@@ -155,6 +155,29 @@ def batch_size_for_family(family: str | None, *, settings: Any = None) -> int:
     return max(MIN_BATCH_SIZE, min(MAX_BATCH_SIZE, int(budget / seconds)))
 
 
+def _circuit_wait_seconds(settings: Any) -> int:
+    """Сколько ждать остывания цепи. Максимум по всем источникам.
+
+    Источников в пачке может быть несколько, а пауза одна на обход. Берётся
+    наибольшее из требуемых: подождать лишнего дешевле, чем вернуться к
+    источнику, который ещё не остыл.
+    """
+    from tmo.catalog.registry import source_registry
+    from tmo.connectors.transport import TRANSPORT_POOL
+
+    waits = [
+        TRANSPORT_POOL.circuit(
+            source.code,
+            settings.circuit_failure_threshold,
+            settings.circuit_reset_seconds,
+            max_reset_seconds=settings.circuit_reset_max_seconds,
+        ).current_reset_seconds
+        for source in source_registry().sources
+        if source.is_enabled
+    ]
+    return max(waits) if waits else settings.circuit_reset_seconds
+
+
 @dataclass(slots=True)
 class PipelineReport:
     snapshot_id: int
@@ -268,7 +291,10 @@ def collect_jobs(
         skipped_whole_batch = report.attempts == 0 and report.skipped_untouched >= len(chunk)
         has_more = start < len(job_ids)
         if skipped_whole_batch and has_more:
-            wait = settings.circuit_reset_seconds
+            # Ждём столько, сколько размыкатель считает нужным сейчас, а не
+            # столько, сколько записано в настройке: повторное размыкание
+            # означает, что прошлой паузы не хватило.
+            wait = _circuit_wait_seconds(settings)
             if deadline is not None and now_utc() + timedelta(seconds=wait) >= deadline:
                 totals["deadline_reached"] = 1
                 break
