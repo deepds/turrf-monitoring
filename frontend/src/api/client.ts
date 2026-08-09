@@ -71,14 +71,30 @@ export const api = {
   archiveUrl: (snapshotDate: string, attemptNo: number, level: 'showcase' | 'evidence') =>
     `${BASE}/market-snapshots/${snapshotDate}/archive?attempt_no=${attemptNo}&level=${level}`,
 
-  /** Загружает архив снимка. `force` — согласие положить копию новой версией. */
-  uploadArchive: async (file: File, force = false): Promise<ImportResult> => {
-    const body = new FormData();
-    body.append('file', file);
-    const response = await fetch(`${BASE}/market-snapshots/archive?force=${force}`, {
-      method: 'POST',
-      body,
-    });
+  /**
+   * Скачивает архив снимка, сообщая о ходе.
+   *
+   * Не навигацией браузера, как раньше: сервер сначала **формирует** архив —
+   * полная матрица с доказательствами собирается около полутора минут, — и всё
+   * это время окно не показывает ничего. Пользователь видит замерший экран и
+   * жмёт кнопку повторно, запуская вторую сборку.
+   *
+   * `onStage` вызывается при смене этапа, `onBytes` — по мере получения тела.
+   * Общий размер известен не всегда: сервер может отдавать потоком без
+   * `Content-Length`, и тогда процент показать нечем — остаются байты.
+   */
+  downloadArchive: async (
+    snapshotDate: string,
+    attemptNo: number,
+    level: 'showcase' | 'evidence',
+    hooks: {
+      onStage?: (stage: 'building' | 'downloading' | 'done') => void;
+      onBytes?: (received: number, total: number | null) => void;
+    } = {},
+  ): Promise<void> => {
+    hooks.onStage?.('building');
+    const url = `${BASE}/market-snapshots/${snapshotDate}/archive?attempt_no=${attemptNo}&level=${level}`;
+    const response = await fetch(url);
     if (!response.ok) {
       let detail = `HTTP ${response.status}`;
       try {
@@ -89,8 +105,86 @@ export const api = {
       }
       throw new ApiError(detail, response.status);
     }
-    return response.json();
+
+    hooks.onStage?.('downloading');
+    const header = response.headers.get('Content-Length');
+    const total = header ? Number(header) : null;
+    const reader = response.body?.getReader();
+    const chunks: BlobPart[] = [];
+    let received = 0;
+    if (reader) {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.byteLength;
+        hooks.onBytes?.(received, total);
+      }
+    } else {
+      chunks.push(await response.blob());
+    }
+
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const match = /filename="?([^";]+)"?/.exec(disposition);
+    const name = match?.[1] ?? `tmo-snapshot-${snapshotDate}-v${attemptNo}-${level}.tar`;
+
+    const href = URL.createObjectURL(new Blob(chunks, { type: 'application/x-tar' }));
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.download = name;
+    anchor.click();
+    URL.revokeObjectURL(href);
+    hooks.onStage?.('done');
   },
+
+  /**
+   * Загружает архив снимка, сообщая о ходе отправки.
+   *
+   * `XMLHttpRequest`, а не `fetch`: ход отправки тела в `fetch` не наблюдаем ни
+   * в одном браузере, а отправляются десятки мегабайт. `force` — согласие
+   * положить копию новой версией.
+   */
+  uploadArchive: (
+    file: File,
+    force = false,
+    hooks: {
+      onProgress?: (sent: number, total: number) => void;
+      onStage?: (stage: 'sending' | 'importing') => void;
+    } = {},
+  ): Promise<ImportResult> =>
+    new Promise((resolve, reject) => {
+      const body = new FormData();
+      body.append('file', file);
+      const request = new XMLHttpRequest();
+      request.open('POST', `${BASE}/market-snapshots/archive?force=${force}`);
+      request.upload.onprogress = (event) => {
+        hooks.onProgress?.(event.loaded, event.total || file.size);
+        // Тело ушло целиком — дальше сервер распаковывает и пишет в базу, и
+        // это самая долгая часть: полная матрица кладётся минутами.
+        if (event.total && event.loaded >= event.total) hooks.onStage?.('importing');
+      };
+      request.onload = () => {
+        if (request.status >= 200 && request.status < 300) {
+          try {
+            resolve(JSON.parse(request.responseText));
+          } catch {
+            reject(new ApiError('Ответ сервера не разобран', request.status));
+          }
+          return;
+        }
+        let detail = `HTTP ${request.status}`;
+        try {
+          const payload = JSON.parse(request.responseText);
+          if (payload?.detail) detail = String(payload.detail);
+        } catch {
+          /* тело не разобралось — остаётся код */
+        }
+        reject(new ApiError(detail, request.status));
+      };
+      request.onerror = () => reject(new ApiError('Связь с сервером потеряна', 0));
+      hooks.onStage?.('sending');
+      request.send(body);
+    }),
 
   origins: () => request<{ origins: { code: string; name: string }[] }>('/showcase/origins'),
 

@@ -81,6 +81,12 @@ export function PriceChart({ series, height = 420, valueKey = 'median' }: Props)
           labelFormatter={(label: string) => `Дата: ${label}`}
         />
         <Legend />
+        {/* `connectNulls` соединяет разрыв прямой. Точки по краям — наблюдения,
+            линия между ними только соединяет их и измеренными значениями не
+            является. Разорванный ряд читался хуже: по куску из двух точек не
+            видно ни направления цены, ни её уровня. Отсутствующее наблюдение при
+            этом остаётся отсутствующим — маркера на нём нет, и раскрыть его до
+            предложений нельзя. */}
         {series.map((item, index) => (
           <Line
             key={item.key}
@@ -99,7 +105,7 @@ export function PriceChart({ series, height = 420, valueKey = 'median' }: Props)
                 if (metricId) navigate(`/metrics/${metricId}`);
               },
             }}
-            connectNulls={false}
+            connectNulls
             isAnimationActive={false}
           />
         ))}

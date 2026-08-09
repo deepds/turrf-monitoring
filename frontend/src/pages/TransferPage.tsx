@@ -20,6 +20,7 @@ import {
   Modal,
   Radio,
   Select,
+  Progress,
   Space,
   Spin,
   Table,
@@ -50,25 +51,69 @@ export function TransferPage({ snapshots }: { snapshots: SnapshotListItem[] }) {
   );
   const [attemptNo, setAttemptNo] = useState<number | undefined>();
   const [level, setLevel] = useState<Level>('evidence');
-  const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Ход двух долгих операций. Обе идут минутами, и без явного этапа экран
+  // выглядит замершим: пользователь жмёт кнопку второй раз и запускает вторую
+  // сборку архива на сервере.
+  const [download, setDownload] = useState<{ stage: string; text: string } | null>(null);
+  const [upload, setUpload] = useState<{ percent: number; text: string } | null>(null);
 
   const selected = snapshots.find((item) => item.snapshot_date === snapshotDate);
   const versions = selected?.versions ?? [];
   const attempt = attemptNo ?? versions[0]?.attempt_no;
 
-  const download = () => {
+  const startDownload = async () => {
     if (!snapshotDate || attempt === undefined) return;
-    // Навигация, а не fetch: десятки мегабайт незачем тянуть в память страницы.
-    window.location.href = api.archiveUrl(snapshotDate, attempt, level);
-  };
-
-  const upload = async (file: File, force = false) => {
-    setBusy(true);
     setError(null);
     try {
-      const outcome = await api.uploadArchive(file, force);
+      await api.downloadArchive(snapshotDate, attempt, level, {
+        onStage: (stage) => {
+          if (stage === 'building') {
+            setDownload({
+              stage,
+              text: 'Сервер собирает архив. Полная матрица с доказательствами — около полутора минут',
+            });
+          }
+          if (stage === 'done') setDownload(null);
+        },
+        onBytes: (received, total) => {
+          const mb = (received / 1024 / 1024).toFixed(1);
+          setDownload({
+            stage: 'downloading',
+            text: total
+              ? `Скачивание: ${mb} из ${(total / 1024 / 1024).toFixed(1)} МБ`
+              : `Скачивание: ${mb} МБ`,
+          });
+        },
+      });
+    } catch (exc) {
+      setDownload(null);
+      setError(exc instanceof Error ? exc.message : String(exc));
+    }
+  };
+
+  const startUpload = async (file: File, force = false) => {
+    setError(null);
+    setUpload({ percent: 0, text: 'Отправка файла' });
+    try {
+      const outcome = await api.uploadArchive(file, force, {
+        onProgress: (sent, total) => {
+          const percent = Math.round((sent / total) * 100);
+          setUpload({
+            percent,
+            text: `Отправка: ${(sent / 1024 / 1024).toFixed(1)} из ${(total / 1024 / 1024).toFixed(1)} МБ`,
+          });
+        },
+        onStage: (stage) => {
+          if (stage === 'importing') {
+            setUpload({
+              percent: 100,
+              text: 'Файл отправлен. Сервер распаковывает и пишет в базу — это минуты',
+            });
+          }
+        },
+      });
       setResult(outcome);
       if (outcome.status === 'DUPLICATE') {
         Modal.confirm({
@@ -88,13 +133,13 @@ export function TransferPage({ snapshots }: { snapshots: SnapshotListItem[] }) {
           ),
           okText: 'Загрузить копией',
           cancelText: 'Отменить',
-          onOk: () => upload(file, true),
+          onOk: () => startUpload(file, true),
         });
       }
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
-      setBusy(false);
+      setUpload(null);
     }
   };
 
@@ -150,22 +195,48 @@ export function TransferPage({ snapshots }: { snapshots: SnapshotListItem[] }) {
           <Button
             type="primary"
             icon={<DownloadOutlined />}
-            disabled={!snapshotDate || attempt === undefined}
-            onClick={download}
+            loading={Boolean(download)}
+            disabled={!snapshotDate || attempt === undefined || Boolean(download)}
+            onClick={() => void startDownload()}
           >
-            Скачать архив
+            {download ? 'Готовится…' : 'Скачать архив'}
           </Button>
+
+          {download && (
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              {/* Пока сервер собирает архив, известного процента нет: это одна
+                  длинная операция на его стороне. Полоса показывает, что работа
+                  идёт, а не сколько её осталось, — врать процентом хуже. */}
+              <Progress
+                percent={100}
+                status="active"
+                showInfo={false}
+                strokeColor={download.stage === 'building' ? '#faad14' : undefined}
+              />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {download.text}
+              </Typography.Text>
+            </Space>
+          )}
         </Space>
       </Card>
 
       <Card size="small" title="Загрузка">
-        <Spin spinning={busy} tip="Загрузка идёт: полная матрица занимает около минуты">
+        {upload && (
+          <Space direction="vertical" size={4} style={{ width: '100%', marginBottom: 12 }}>
+            <Progress percent={upload.percent} status="active" />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {upload.text}
+            </Typography.Text>
+          </Space>
+        )}
+        <Spin spinning={Boolean(upload)} tip={upload?.text ?? ''}>
           <Upload.Dragger
             accept=".tar,.tar.gz,.tgz"
             maxCount={1}
             showUploadList={false}
             beforeUpload={(file) => {
-              void upload(file as unknown as File);
+              void startUpload(file as unknown as File);
               // Возврат false отключает собственную отправку Ant Design:
               // файл уходит нашим запросом, с обработкой совпадений.
               return false;

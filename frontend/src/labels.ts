@@ -70,6 +70,45 @@ export function metricType(code: string): string {
   return METRIC_TYPE[code] ?? code;
 }
 
+/**
+ * Исход обращения к источнику.
+ *
+ * Различать их важнее, чем кажется: `CIRCUIT_OPEN` и `BUDGET_EXHAUSTED` — это
+ * **наши** решения перестать спрашивать, а не отказы источника. Показывать их
+ * одним словом «отказ» значило бы приписывать источнику то, чего он не делал.
+ */
+export const OUTCOME: Record<string, { label: string; hint: string }> = {
+  SUCCESS: { label: 'Успешно', hint: 'Источник ответил полной выдачей' },
+  PARTIAL: {
+    label: 'Частично',
+    hint: 'Данные получены, но выборка неполна: обрезана выдача либо кончился бюджет времени',
+  },
+  NO_MARKET: {
+    label: 'Нет рынка',
+    hint: 'Источник ответил, предложений нет. Это ответ о рынке, а не сбой',
+  },
+  TIMEOUT: { label: 'Таймаут', hint: 'Источник не ответил за отведённое время' },
+  TRANSPORT_ERROR: {
+    label: 'Ошибка связи',
+    hint: 'Источник вернул ошибку 5xx либо соединение не состоялось',
+  },
+  RATE_LIMITED: { label: 'Лимит источника', hint: 'Источник ограничил темп обращений' },
+  CIRCUIT_OPEN: {
+    label: 'Пропущено размыкателем',
+    hint: 'Наше решение перестать спрашивать после серии отказов, а не отказ источника',
+  },
+  BUDGET_EXHAUSTED: {
+    label: 'Не хватило времени',
+    hint: 'Бюджет пачки кончился раньше, чем дошла очередь до этого наблюдения',
+  },
+  SCHEMA_ERROR: { label: 'Ответ не разобран', hint: 'Источник ответил в неожиданном формате' },
+  FAILED: { label: 'Отказ', hint: 'Ни один источник не дал пригодного результата' },
+};
+
+export function outcome(code: string): { label: string; hint: string } {
+  return OUTCOME[code] ?? { label: code, hint: '' };
+}
+
 /** Семейство наблюдений. */
 export const FAMILY: Record<string, string> = {
   RAIL: 'Железная дорога',

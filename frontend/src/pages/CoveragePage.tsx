@@ -19,13 +19,18 @@ import {
   Spin,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { api } from '../api/client';
 import type { CoverageResponse, FamilyCoverage, SnapshotListItem } from '../api/types';
 import { dateLabel, dateTimeLabel, percent } from '../format';
-import { confidence, metricType, snapshotStatus } from '../labels';
+import { confidence, metricType, outcome, snapshotStatus } from '../labels';
+
+//: Исходы, в которых виноват источник. Остальные — наши решения перестать
+//: спрашивать, и красным их помечать неверно.
+const SOURCE_FAULT = new Set(['TIMEOUT', 'TRANSPORT_ERROR', 'RATE_LIMITED', 'SCHEMA_ERROR']);
 
 const FAMILY_LABEL: Record<string, string> = {
   RAIL: 'Железная дорога',
@@ -133,9 +138,15 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
         ) : (
           <Space size={4} wrap>
             {Object.entries(value).map(([code, count]) => (
-              <Tag color="red" key={code}>
-                {code}: {count}
-              </Tag>
+              <Tooltip key={code} title={outcome(code).hint}>
+                {/* Красным помечено только то, что сделал источник. Наши
+                    собственные решения перестать спрашивать — размыкатель и
+                    исчерпанный бюджет — идут другим цветом: приписывать их
+                    источнику значит обвинять его в том, чего он не делал. */}
+                <Tag color={SOURCE_FAULT.has(code) ? 'red' : 'orange'}>
+                  {outcome(code).label}: {count}
+                </Tag>
+              </Tooltip>
             ))}
           </Space>
         ),
