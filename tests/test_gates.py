@@ -252,8 +252,7 @@ def test_recalculation_replaces_the_run_of_the_same_methodology(published) -> No
     перестал закрываться в принципе.
     """
     with session_scope() as session:
-        first = active_run(session, published.snapshot_id)
-        first_id = first.id
+        assert active_run(session, published.snapshot_id) is not None
         report = calculate_snapshot(session, published.snapshot_id, make_active=True)
 
     # Сравнивать идентификаторы бессмысленно: SQLite переиспользует
