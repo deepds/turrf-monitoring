@@ -20,6 +20,11 @@ import { HotelsPage } from './pages/HotelsPage';
 import { MetricPage } from './pages/MetricPage';
 import { CoveragePage } from './pages/CoveragePage';
 import { TransferPage } from './pages/TransferPage';
+import {
+  CollectionProgress,
+  NoSnapshotsYet,
+  useCollectionProgress,
+} from './components/CollectionProgress';
 
 const NAV = [
   { key: '/trips', icon: <CompassOutlined />, label: 'Куда ехать' },
@@ -32,6 +37,7 @@ const NAV = [
 
 export function App() {
   const location = useLocation();
+  const progress = useCollectionProgress();
   const [snapshots, setSnapshots] = useState<SnapshotListItem[]>([]);
   const [dictionary, setDictionary] = useState<Dictionary | undefined>();
   const [ready, setReady] = useState(false);
@@ -111,6 +117,21 @@ export function App() {
               message="Не удалось загрузить состояние витрины"
               description={fatal}
             />
+          )}
+          {/* Ход сбора — над экранами и независимо от них. Внутри шапки снимка
+              он был виден только при наличии готового снимка, то есть пропадал
+              на свежем стенде: там ни одного закрытого дня ещё нет, витрина
+              отвечает 404, и вместе с ней исчезал единственный признак того,
+              что система работает. */}
+          {progress && !progress.is_closed && (
+            <div style={{ marginBottom: 16 }}>
+              <CollectionProgress progress={progress} />
+            </div>
+          )}
+          {ready && !snapshots.length && (
+            <div style={{ marginBottom: 16 }}>
+              <NoSnapshotsYet collecting={Boolean(progress && !progress.is_closed)} />
+            </div>
           )}
           {!ready ? (
             <Spin size="large" style={{ display: 'block', margin: '80px auto' }} />
