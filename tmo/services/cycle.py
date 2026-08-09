@@ -209,6 +209,31 @@ def coverage_meets_ready(
     целится выше порога, а судит порог.
     """
     profile = methodology_profile(profile_version)
+
+    # Ни одного наблюдения без терминального исхода. Ворота полноты требуют
+    # именно этого, и доля отвеченных их требование не выражает: в снимке
+    # 09.08.2026 отвеченных было 98,35 % при пороге 98 %, диспетчер закрыл
+    # снимок — а 31 наблюдение оставалось в работе, и ворота его не пропустили.
+    # Проверка, допускающая до ворот то, что ворота заведомо отвергнут, хуже
+    # отсутствующей: она тратит расчёт и закрывает сутки терминальным отказом.
+    in_flight = int(
+        session.scalar(
+            select(func.count(models.CollectionJob.id)).where(
+                models.CollectionJob.snapshot_id == snapshot_id,
+                models.CollectionJob.status.in_(
+                    [
+                        JobStatus.PLANNED.value,
+                        JobStatus.DISPATCHED.value,
+                        JobStatus.RUNNING.value,
+                    ]
+                ),
+            )
+        )
+        or 0
+    )
+    if in_flight:
+        return False
+
     shares = answered_share(session, snapshot_id)
     if not shares:
         return False

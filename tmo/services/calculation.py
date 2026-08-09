@@ -277,6 +277,19 @@ def _evaluate_job(
 ) -> SelectionOutcome:
     family = CollectionFamily(job.family)
     rules = profile.selection_for(family)
+    if family is CollectionFamily.HOTEL and job.stars is not None:
+        # Отбор обязан сравнивать звёздность предложения со звёздностью **этой**
+        # метрики, а не с объединением разрешённых профилем.
+        #
+        # Матрица проживания — город × звёздность × даты, и у каждой метрики своя
+        # категория. Профиль разрешает 3, 4 и 5 звёзд; фильтр по объединению
+        # пропускал в метрику «четыре звезды» предложения трёх и пяти. Ворота
+        # это ловили — 55 253 нарушения `HOTEL_STARS_ALLOWED` в снимке
+        # 09.08.2026, — и снимок не публиковался. Правильно не публиковался:
+        # медиана «четырёхзвёздочного проживания», посчитанная по трём и пяти
+        # звёздам, описывает не ту величину, что заявлена в её названии.
+        allowed = {int(item) for item in (rules.get("stars") or [3, 4, 5])}
+        rules = {**rules, "stars": sorted(allowed & {int(job.stars)})}
     candidates = [
         Candidate(
             ref=offer.id,

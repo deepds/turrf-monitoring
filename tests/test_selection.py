@@ -254,6 +254,40 @@ def test_wrong_stars_are_excluded(profile) -> None:
     assert result.excluded[0].reason is ExclusionReason.WRONG_STARS
 
 
+def test_metric_takes_only_its_own_star_category() -> None:
+    """В метрику «четыре звезды» идут только четырёхзвёздочные предложения.
+
+    Матрица проживания — город × звёздность × даты, и у каждой метрики своя
+    категория. Профиль разрешает 3, 4 и 5 звёзд, и фильтр по этому объединению
+    пропускал в четырёхзвёздочную метрику предложения трёх и пяти звёзд: 55 253
+    нарушения `HOTEL_STARS_ALLOWED` в снимке 09.08.2026, снимок не опубликован.
+
+    Медиана «четырёхзвёздочного проживания», посчитанная по трём и пяти
+    звёздам, описывает не ту величину, что заявлена в её названии, — поэтому
+    правило и стоит среди критических.
+    """
+    loaded = methodology_profile("baseline_v1")
+    base = loaded.selection_for(CollectionFamily.HOTEL)
+    allowed = {int(item) for item in base["stars"]}
+    assert allowed == {3, 4, 5}, "профиль изменился — тест описывает другую ситуацию"
+
+    # Так правила сужаются расчётом под звёздность конкретного наблюдения.
+    rules = {**base, "stars": sorted(allowed & {4})}
+    result = select(
+        [
+            hotel_candidate(1, "3000", stars=3),
+            hotel_candidate(2, "4000", stars=4),
+            hotel_candidate(3, "5000", stars=5),
+        ],
+        family=CollectionFamily.HOTEL,
+        rules=rules,
+        outlier_rules={"min_sample_for_removal": 8},
+        currency="RUB",
+    )
+    assert [d.candidate.ref for d in result.included] == [2]
+    assert {d.reason for d in result.excluded} == {ExclusionReason.WRONG_STARS}
+
+
 # --------------------------------------------------------------------------- #
 # Провенанс отбора
 # --------------------------------------------------------------------------- #

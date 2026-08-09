@@ -161,6 +161,28 @@ def test_hole_that_exhausted_its_attempts_stops_being_retried(session) -> None:
     assert "исчерпали лимит попыток" in step.reason
 
 
+def test_readiness_waits_for_every_observation_to_reach_a_terminal_outcome(session) -> None:
+    """Готовность обязана требовать того же, что и ворота полноты.
+
+    В снимке 09.08.2026 отвеченных было 98,35 % при пороге 98 %, диспетчер
+    закрыл сутки — а 31 наблюдение оставалось в работе, и ворота его не
+    пропустили. Проверка, допускающая до ворот то, что они заведомо отвергнут,
+    хуже отсутствующей: она тратит расчёт и закрывает сутки отказом.
+    """
+    snapshot = _snapshot(session)
+    for _ in range(99):
+        _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
+    in_flight = _job(session, snapshot, "AIR", status=JobStatus.RUNNING, touched=True)
+
+    assert not cycle.coverage_meets_ready(session, snapshot.id), (
+        "снимок с наблюдением в работе не может считаться готовым"
+    )
+
+    in_flight.status = JobStatus.SUCCESS
+    session.flush()
+    assert cycle.coverage_meets_ready(session, snapshot.id)
+
+
 def test_snapshot_of_pure_failures_is_not_ready(session) -> None:
     """Отказ — это не собранное наблюдение, сколько бы их ни было.
 
