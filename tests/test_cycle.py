@@ -27,6 +27,11 @@ from tmo.services.pipeline import seconds_per_observation
 
 DAY = date(2026, 8, 9)
 
+#: Момент внутри операционных суток снимка. Без него тесты, дошедшие до
+#: проверки рубежа, зеленеют до 23:00 и краснеют после — а падение это
+#: описывает не дефект, а время запуска.
+MIDDAY = datetime(2026, 8, 9, 12, 0, tzinfo=MSK)
+
 
 # --------------------------------------------------------------------------- #
 # Обвязка
@@ -73,7 +78,7 @@ def _job(session, snapshot, family, *, status=JobStatus.PLANNED, touched=False, 
 
 
 def test_missing_snapshot_is_opened(session) -> None:
-    step = cycle.next_step(session, DAY)
+    step = cycle.next_step(session, DAY, now=MIDDAY)
     assert step.step == cycle.STEP_OPEN
 
 
@@ -87,7 +92,7 @@ def test_air_is_collected_before_the_cheap_families(session) -> None:
     for family in ("RAIL", "HOTEL", "AIR"):
         _job(session, snapshot, family)
 
-    step = cycle.next_step(session, DAY)
+    step = cycle.next_step(session, DAY, now=MIDDAY)
     assert step.step == cycle.STEP_COLLECT
     assert step.family == CollectionFamily.AIR.value
 
@@ -103,13 +108,13 @@ def test_families_follow_one_another_without_overlap(session) -> None:
     air = _job(session, snapshot, "AIR")
     _job(session, snapshot, "RAIL")
 
-    assert cycle.next_step(session, DAY).family == "AIR"
+    assert cycle.next_step(session, DAY, now=MIDDAY).family == "AIR"
 
     air.status = JobStatus.SUCCESS
     air.first_dispatched_at = datetime.now(MSK)
     session.flush()
 
-    assert cycle.next_step(session, DAY).family == "RAIL"
+    assert cycle.next_step(session, DAY, now=MIDDAY).family == "RAIL"
 
 
 def test_touched_family_moves_to_recovery_not_to_a_second_pass(session) -> None:
@@ -123,7 +128,7 @@ def test_touched_family_moves_to_recovery_not_to_a_second_pass(session) -> None:
     _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
     _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)
 
-    step = cycle.next_step(session, DAY)
+    step = cycle.next_step(session, DAY, now=MIDDAY)
     assert step.step == cycle.STEP_RECOVER
     assert step.details["holes"] == 1
 
@@ -138,12 +143,12 @@ def test_recovery_repeats_while_holes_remain(session) -> None:
     snapshot = _snapshot(session)
     hole = _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)
 
-    assert cycle.next_step(session, DAY).step == cycle.STEP_RECOVER
-    assert cycle.next_step(session, DAY).step == cycle.STEP_RECOVER
+    assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_RECOVER
+    assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_RECOVER
 
     hole.status = JobStatus.SUCCESS
     session.flush()
-    assert cycle.next_step(session, DAY).step == cycle.STEP_CLOSE
+    assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_CLOSE
 
 
 def test_hole_that_exhausted_its_attempts_stops_being_retried(session) -> None:
@@ -156,7 +161,7 @@ def test_hole_that_exhausted_its_attempts_stops_being_retried(session) -> None:
     snapshot = _snapshot(session)
     _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True, retries=99)
 
-    step = cycle.next_step(session, DAY, max_job_attempts=12)
+    step = cycle.next_step(session, DAY, now=MIDDAY, max_job_attempts=12)
     assert step.step == cycle.STEP_CLOSE
     assert "исчерпали лимит попыток" in step.reason
 
@@ -197,7 +202,7 @@ def test_snapshot_of_pure_failures_is_not_ready(session) -> None:
         _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)
 
     assert not cycle.coverage_meets_ready(session, snapshot.id)
-    assert cycle.next_step(session, DAY).step == cycle.STEP_RECOVER
+    assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_RECOVER
 
 
 def test_empty_market_is_an_answer_not_a_hole(session) -> None:
@@ -218,7 +223,7 @@ def test_full_coverage_closes_the_snapshot_without_waiting_for_the_deadline(sess
     for family in ("AIR", "RAIL", "HOTEL"):
         _job(session, snapshot, family, status=JobStatus.SUCCESS, touched=True)
 
-    step = cycle.next_step(session, DAY)
+    step = cycle.next_step(session, DAY, now=MIDDAY)
     assert step.step == cycle.STEP_CLOSE
     assert "READY" in step.reason
 
@@ -243,7 +248,7 @@ def test_closed_snapshot_asks_for_nothing(session) -> None:
     for status in (SnapshotStatus.READY, SnapshotStatus.DEGRADED, SnapshotStatus.FAILED):
         session.query(models.MarketSnapshot).delete()
         _snapshot(session, status=status)
-        assert cycle.next_step(session, DAY).step == cycle.STEP_IDLE
+        assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_IDLE
 
 
 def test_cycle_closes_inside_its_own_calendar_day() -> None:
@@ -311,6 +316,28 @@ def test_stall_threshold_outlives_a_step_lease() -> None:
 # --------------------------------------------------------------------------- #
 # Досбор: собственная рабочая точка и растущая пауза
 # --------------------------------------------------------------------------- #
+
+
+def test_close_lease_outlives_the_calculation_it_protects() -> None:
+    """Аренда закрытия обязана пережить расчёт, который она защищает.
+
+    Расчёт полной матрицы — единственный вызов длиной в полчаса, продлевать
+    аренду посреди него некому. Прежний срок в 15 минут истекал на середине,
+    диспетчер видел аренду свободной и запускал закрытие заново: снимок
+    09.08.2026 получил пять расчётов подряд, два одновременно, и не закрылся
+    вовсе — каждый новый заход сбрасывал статус и начинал с нуля.
+    """
+    from tmo.tasks.collection import CLOSE_LEASE_TTL, close_snapshot
+
+    measured_calculation_seconds = 37 * 60
+    assert measured_calculation_seconds < CLOSE_LEASE_TTL, (
+        f"аренда {CLOSE_LEASE_TTL} с не переживает измеренный расчёт "
+        f"{measured_calculation_seconds} с"
+    )
+    assert close_snapshot.time_limit > CLOSE_LEASE_TTL, (
+        "аренда обязана истечь раньше жёсткого лимита задачи, иначе умерший шаг "
+        "заблокирует закрытие насовсем"
+    )
 
 
 def test_one_lease_covers_every_step_that_touches_the_source() -> None:
@@ -433,7 +460,7 @@ def test_progress_tells_collection_apart_from_failure(session) -> None:
     _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
     _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)
 
-    state = cycle.progress(session, DAY)
+    state = cycle.progress(session, DAY, now=MIDDAY)
     assert state is not None
     assert state["is_closed"] is False
     assert state["step"] == cycle.STEP_RECOVER
@@ -442,7 +469,7 @@ def test_progress_tells_collection_apart_from_failure(session) -> None:
 
     snapshot.status = SnapshotStatus.FAILED
     session.flush()
-    assert cycle.progress(session, DAY)["is_closed"] is True
+    assert cycle.progress(session, DAY, now=MIDDAY)["is_closed"] is True
 
 
 def test_untouched_observations_are_not_reported_as_holes(session) -> None:
@@ -460,7 +487,7 @@ def test_untouched_observations_are_not_reported_as_holes(session) -> None:
     _job(session, snapshot, "AIR", status=JobStatus.FAILED, touched=True)  # не ответил
     _job(session, snapshot, "AIR", status=JobStatus.SUCCESS, touched=True)
 
-    state = cycle.progress(session, DAY)
+    state = cycle.progress(session, DAY, now=MIDDAY)
     assert state["planned"] == 12
     assert state["answered_count"] == 1
     assert state["remaining"] == 11, "осталось собрать всё, кроме отвеченного"
@@ -469,7 +496,7 @@ def test_untouched_observations_are_not_reported_as_holes(session) -> None:
 
 def test_progress_is_absent_before_the_day_opens(session) -> None:
     """Снимка за сегодня ещё нет — это состояние ночи до 00:30, а не ошибка."""
-    assert cycle.progress(session, DAY) is None
+    assert cycle.progress(session, DAY, now=MIDDAY) is None
 
 
 def test_versions_of_one_date_are_listed_separately(session) -> None:

@@ -44,6 +44,12 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # Общая память контейнера. Умолчание Docker — 64 МБ, и параллельным воркерам
+    # PostgreSQL её не хватает на соединении метрик со связями и предложениями:
+    # 09.08.2026 финализация упала с `DiskFull: could not resize shared memory
+    # segment`, хотя на диске узла был терабайт свободного места. Ошибка звучит
+    # как переполнение диска и им не является — это `/dev/shm` контейнера.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: tmo
       POSTGRES_PASSWORD: ${TMO_DB_PASSWORD:-tmo_dev_pwd}

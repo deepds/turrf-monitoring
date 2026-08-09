@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.orm import Session
 
 from tmo.catalog.registry import MethodologyProfile, methodology_profile
@@ -89,9 +89,65 @@ def calculate_snapshot(
     if snapshot is None:
         raise ValueError(f"Снимок {snapshot_id} не найден")
 
+    # Прежний расчёт **той же версии методики** — не история, а повтор.
+    #
+    # Разные версии методики на одном снимке сравнивают между собой, и переписать
+    # такой расчёт значило бы переписать историю: на него ссылаются уже показанные
+    # цифры. Две прогонки одной и той же версии по одному снимку неразличимы, и
+    # хранить обе незачем.
+    #
+    # Цена, если этого не делать, измерена: снимок 09.08.2026 получил пять
+    # расчётов подряд из-за истекавшей аренды, и в базе осело 18 573 042 связи
+    # там, где должен быть миллион, — 3,2 ГБ. Подсчёт метрик в воротах стал идти
+    # двадцать две минуты вместо секунд, и снимок перестал закрываться в
+    # принципе: каждый следующий заход не успевал раньше, чем начинался новый.
+    #
+    # Удаляются сами прогонки; метрики, связи и строки витрины уходят каскадом.
+    superseded = list(
+        session.scalars(
+            select(models.CalculationRun.id).where(
+                models.CalculationRun.snapshot_id == snapshot_id,
+                models.CalculationRun.methodology_version == profile.version,
+            )
+        )
+    )
+    if superseded:
+        logger.info(
+            "Прежние расчёты той же методики удаляются",
+            snapshot_id=snapshot_id,
+            methodology_version=profile.version,
+            runs=len(superseded),
+        )
+        # Дети удаляются явно, а не каскадом. Каскад объявлен в схеме и работает
+        # в PostgreSQL, но SQLite применяет внешние ключи только при включённой
+        # прагме — и там же гоняются тесты. Полагаться на настройку СУБД в
+        # операции, которая иначе оставляет миллионы осиротевших строк, нельзя.
+        metric_ids = select(models.CalculatedMetric.id).where(
+            models.CalculatedMetric.calculation_run_id.in_(superseded)
+        )
+        session.execute(
+            delete(models.MetricOfferLink).where(
+                models.MetricOfferLink.metric_id.in_(metric_ids)
+            )
+        )
+        session.execute(
+            delete(models.CalculatedMetric).where(
+                models.CalculatedMetric.calculation_run_id.in_(superseded)
+            )
+        )
+        session.execute(
+            delete(models.TripCostRow).where(
+                models.TripCostRow.calculation_run_id.in_(superseded)
+            )
+        )
+        session.execute(
+            delete(models.CalculationRun).where(models.CalculationRun.id.in_(superseded))
+        )
+        session.flush()
+
     if make_active:
-        # Активный расчёт снимка ровно один; прежние остаются для сравнения
-        # версий методики и никогда не переписываются.
+        # Активный расчёт снимка ровно один; расчёты других версий методики
+        # остаются для сравнения и никогда не переписываются.
         session.execute(
             update(models.CalculationRun)
             .where(models.CalculationRun.snapshot_id == snapshot_id)

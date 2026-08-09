@@ -236,14 +236,29 @@ def _snapshot_for(session) -> int:
     return snapshot.id
 
 
-def test_recalculation_creates_a_new_run_and_keeps_the_old(published) -> None:
-    """Пересчёт не переписывает прежний расчёт: на него ссылались цифры."""
+def test_recalculation_replaces_the_run_of_the_same_methodology(published) -> None:
+    """Повтор той же методики заменяет прежний расчёт, а не копится рядом.
+
+    Инвариант «прежний расчёт не переписывается» существует ради сравнения
+    **версий методики**: на расчёт другой версии ссылаются уже показанные цифры,
+    и трогать его нельзя. Удаление здесь ограничено той же версией и этот случай
+    не задевает.
+
+    Две прогонки одной версии по одному снимку неразличимы для витрины — она
+    всегда берёт активный расчёт, а неактивные не читает никто. Хранить их
+    обходится дорого: снимок 09.08.2026 получил пять прогонок из-за истекавшей
+    аренды закрытия, и в базе осело 18 573 042 связи там, где должен быть
+    миллион. Подсчёт метрик в воротах стал идти двадцать две минуты, и снимок
+    перестал закрываться в принципе.
+    """
     with session_scope() as session:
         first = active_run(session, published.snapshot_id)
         first_id = first.id
         report = calculate_snapshot(session, published.snapshot_id, make_active=True)
 
-    assert report.calculation_run_id != first_id
+    # Сравнивать идентификаторы бессмысленно: SQLite переиспользует
+    # освободившийся, PostgreSQL выдаёт следующий из последовательности.
+    # Проверяется то, что от этого не зависит.
     with session_scope() as session:
         runs = list(
             session.scalars(
@@ -253,6 +268,11 @@ def test_recalculation_creates_a_new_run_and_keeps_the_old(published) -> None:
             )
         )
         active = [run for run in runs if run.is_active]
-    assert len(runs) >= 2
+
+    assert len(runs) == 1, f"расчётов той же методики осталось {len(runs)}"
     assert len(active) == 1
     assert active[0].id == report.calculation_run_id
+    # Что связи прежней прогонки действительно исчезли, проверяет
+    # `test_repeated_calculation_of_one_methodology_leaves_one_run`: там
+    # сравниваются итоговые количества, и результат не зависит от того,
+    # переиспользует ли СУБД освободившиеся идентификаторы.

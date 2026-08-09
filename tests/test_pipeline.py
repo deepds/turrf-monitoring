@@ -215,3 +215,60 @@ def test_synthetic_snapshot_is_marked_and_not_published_as_market(pipeline) -> N
         assert snapshot.is_synthetic is True
         assert SnapshotStatus(snapshot.status).is_published
         assert latest_published(session) is None
+
+
+def test_repeated_calculation_of_one_methodology_leaves_one_run(database: str) -> None:
+    """Повтор той же методики по тому же снимку не копит связи.
+
+    Разные версии методики на одном снимке сравнивают между собой, и переписать
+    такой расчёт значило бы переписать историю. Две прогонки **одной** версии
+    неразличимы, и хранить обе незачем.
+
+    Цена измерена: снимок 09.08.2026 получил пять расчётов подряд из-за
+    истекавшей аренды, и в базе осело 18 573 042 связи там, где должен быть
+    миллион. Подсчёт метрик в воротах стал идти двадцать две минуты вместо
+    секунд, и снимок перестал закрываться в принципе.
+    """
+    from sqlalchemy import func, select
+
+    from tmo.core.enums import CollectionFamily
+    from tmo.db import models
+    from tmo.db.session import session_scope
+    from tmo.services.calculation import calculate_snapshot
+    from tmo.services.pipeline import run_daily_pipeline
+
+    report = run_daily_pipeline(
+        snapshot_date=date(2026, 8, 9),
+        horizon_days=3,
+        families=(CollectionFamily.RAIL,),
+        replay_mode="synthetic",
+        is_synthetic=True,
+    )
+
+    def counts() -> tuple[int, int]:
+        with session_scope() as session:
+            runs = session.scalar(
+                select(func.count(models.CalculationRun.id)).where(
+                    models.CalculationRun.snapshot_id == report.snapshot_id
+                )
+            )
+            links = session.scalar(
+                select(func.count(models.MetricOfferLink.id)).join(
+                    models.CalculatedMetric,
+                    models.CalculatedMetric.id == models.MetricOfferLink.metric_id,
+                ).where(models.CalculatedMetric.snapshot_id == report.snapshot_id)
+            )
+        return int(runs or 0), int(links or 0)
+
+    runs_before, links_before = counts()
+    assert runs_before == 1 and links_before > 0
+
+    for _ in range(3):
+        with session_scope() as session:
+            calculate_snapshot(session, report.snapshot_id)
+
+    runs_after, links_after = counts()
+    assert runs_after == 1, f"расчётов той же методики накопилось {runs_after}"
+    assert links_after == links_before, (
+        f"связей стало {links_after} вместо {links_before} — прежние не удалены"
+    )

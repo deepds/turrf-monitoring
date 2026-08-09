@@ -316,15 +316,24 @@ def gate_publication_validity(session: Session, run_id: int) -> GateResult:
             )
         )
 
+    # `NOT EXISTS` со связью по метрике, а не `NOT IN` по всей таблице связей.
+    #
+    # `NOT IN (SELECT metric_id FROM metric_offer_links WHERE is_included)`
+    # читает связи **всех** расчётов базы, а не проверяемого: 09.08.2026 этот
+    # запрос шёл сорок две минуты на 18,5 миллиона строк, держал транзакцию и
+    # заблокировал вторую финализацию. `NOT EXISTS` останавливается на первой
+    # найденной связи каждой метрики и пользуется индексом
+    # `ix_metric_offer_links_metric_included`.
     orphan = session.scalar(
         select(func.count(models.CalculatedMetric.id)).where(
             models.CalculatedMetric.calculation_run_id == run_id,
             models.CalculatedMetric.offers_count > 0,
-            ~models.CalculatedMetric.id.in_(
-                select(models.MetricOfferLink.metric_id).where(
-                    models.MetricOfferLink.is_included.is_(True)
-                )
-            ),
+            ~select(models.MetricOfferLink.id)
+            .where(
+                models.MetricOfferLink.metric_id == models.CalculatedMetric.id,
+                models.MetricOfferLink.is_included.is_(True),
+            )
+            .exists(),
         )
     )
     if orphan:
