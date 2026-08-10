@@ -109,6 +109,43 @@ export function outcome(code: string): { label: string; hint: string } {
   return OUTCOME[code] ?? { label: code, hint: '' };
 }
 
+/**
+ * Причина, по которой предложение не пошло в расчёт — коротко, для плашки.
+ *
+ * Здесь только ярлык. Развёрнутая формулировка приходит с сервера
+ * (`/reference/dictionary`) и показывается подсказкой: она привязана к
+ * методике и меняется вместе с ней, тогда как ярлык должен помещаться в
+ * колонку и оставаться одинаковым от экрана к экрану.
+ *
+ * Ярлык называет признак предложения, а не приговор ему. `WRONG_CAR_TYPE` —
+ * «не тот вагон», а не «плохой вагон»: исключение означает, что предложение
+ * не отвечает наблюдаемой величине, и ничего не говорит о самом предложении.
+ */
+export const EXCLUSION_REASON: Record<string, string> = {
+  NOT_DIRECT: 'Не прямой',
+  WRONG_CAR_TYPE: 'Не тот вагон',
+  WRONG_CABIN: 'Не эконом',
+  REFUNDABLE_FARE: 'Возвратный тариф',
+  NOT_ROUND_TRIP: 'Не круговой',
+  WRONG_PROPERTY_TYPE: 'Не гостиница',
+  WRONG_STARS: 'Не та звёздность',
+  WRONG_ROUTE: 'Не тот маршрут',
+  WRONG_DATES: 'Не те даты',
+  NON_POSITIVE_PRICE: 'Нет цены',
+  WRONG_CURRENCY: 'Другая валюта',
+  DISABLED_PLACES_GROUP: 'Льготные места',
+  SALE_FORBIDDEN: 'Продажа закрыта',
+  NO_PLACES: 'Мест нет',
+  FARE_COLLAPSED_NOT_CHEAPEST: 'Не самый дешёвый тариф',
+  DUPLICATE: 'Дубликат',
+  STATISTICAL_OUTLIER: 'Выброс',
+  UNCLASSIFIED_CAR_TYPE: 'Тип вагона неизвестен',
+};
+
+export function exclusionReason(code: string): string {
+  return EXCLUSION_REASON[code] ?? code;
+}
+
 /** Семейство наблюдений. */
 export const FAMILY: Record<string, string> = {
   RAIL: 'Железная дорога',

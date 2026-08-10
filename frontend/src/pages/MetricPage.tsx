@@ -31,6 +31,7 @@ import { api } from '../api/client';
 import type { Dictionary, MetricDetails, OfferRow, SourceAttempt } from '../api/types';
 import { ConfidenceTag, NoMarketBadge, WarningTags } from '../components/Indicators';
 import { dateLabel, dateTimeLabel, money, moneyPrecise, percent } from '../format';
+import { exclusionReason, outcome } from '../labels';
 
 const METRIC_TYPE_LABEL: Record<string, string> = {
   RAIL_LEG: 'ЖД, плечо в одну сторону, купе, 1 пассажир',
@@ -96,7 +97,9 @@ export function MetricPage({ dictionary }: { dictionary?: Dictionary }) {
                 'причина не указана') + (row.exclusion_detail ? ` · ${row.exclusion_detail}` : '')
             }
           >
-            <Tag color="red">{row.exclusion_reason ?? 'исключено'}</Tag>
+            <Tag color="red">
+              {row.exclusion_reason ? exclusionReason(row.exclusion_reason) : 'исключено'}
+            </Tag>
           </Tooltip>
         ),
     },
@@ -188,7 +191,9 @@ export function MetricPage({ dictionary }: { dictionary?: Dictionary }) {
       dataIndex: 'outcome',
       render: (value: string, row) => (
         <Space direction="vertical" size={0}>
-          <Tag color={OUTCOME_COLOR[value] ?? 'default'}>{value}</Tag>
+          <Tooltip title={outcome(value).hint}>
+            <Tag color={OUTCOME_COLOR[value] ?? 'default'}>{outcome(value).label}</Tag>
+          </Tooltip>
           {row.error_message && (
             <Typography.Text type="secondary" style={{ fontSize: 11 }}>
               {row.error_message}
