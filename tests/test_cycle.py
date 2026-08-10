@@ -251,6 +251,32 @@ def test_closed_snapshot_asks_for_nothing(session) -> None:
         assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_IDLE
 
 
+@pytest.mark.parametrize("status", [SnapshotStatus.READY, SnapshotStatus.DEGRADED])
+def test_late_step_does_not_reopen_a_published_snapshot(database: str, status) -> None:
+    """Шаг, пришедший мимо диспетчера, обязан отказаться сам.
+
+    Проверка выше закрывает эту дыру со стороны того, кто раздаёт работу. Но
+    шаг приходит не только оттуда: задача, не подтверждённая умершим воркером,
+    возвращается брокером часами позже — когда снимок уже опубликован.
+
+    Так 10.08.2026 запоздалый досбор пришёл на опубликованный снимок 09.08. Он
+    перевёл его в ``RECOVERING``, упёрся в истёкший рубеж тех суток, собрал ноль
+    и оставил статус нетерминальным. Снимок исчез с витрины, и его место заняла
+    импортированная копия того же дня — молча, без единой ошибки в логе.
+    """
+    from tmo.db.session import session_scope
+    from tmo.tasks.collection import calculate_snapshot, close_snapshot, recover_snapshot
+
+    with session_scope() as session:
+        snapshot_id = _snapshot(session, status=status).id
+
+    for task in (recover_snapshot, close_snapshot, calculate_snapshot):
+        assert task(snapshot_id=snapshot_id)["status"] == "ALREADY_CLOSED", task.name
+        with session_scope() as session:
+            snapshot = session.get(models.MarketSnapshot, snapshot_id)
+            assert SnapshotStatus(snapshot.status) is status, task.name
+
+
 def test_cycle_closes_inside_its_own_calendar_day() -> None:
     """Рубеж суток обязан лежать внутри суток снимка.
 

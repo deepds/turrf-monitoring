@@ -127,6 +127,34 @@ def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | No
     )
 
 
+def _closed_snapshot(session, snapshot_id: int) -> dict[str, Any] | None:
+    """Отказ работать со снимком, который уже закрыт.
+
+    Диспетчер такого шага не выдаёт: ``cycle.next_step`` возвращает ``IDLE``
+    для терминального снимка. Но шаг приходит не только от диспетчера. Задача,
+    не подтверждённая умершим воркером, возвращается брокером — и возвращается
+    часами позже, когда снимок давно опубликован. Проверять это обязан сам шаг:
+    защита в том, кто раздаёт работу, не защищает от работы, пришедшей мимо
+    него.
+
+    10.08.2026 запоздалый досбор пришёл на опубликованный снимок 09.08, перевёл
+    его в ``RECOVERING``, упёрся в истёкший дедлайн тех суток, собрал ноль — и
+    оставил статус нетерминальным. Снимок пропал с витрины, а его место заняла
+    импортированная копия того же дня.
+    """
+    snapshot = session.get(models.MarketSnapshot, snapshot_id)
+    if snapshot is None:
+        return {"status": "NO_SNAPSHOT", "snapshot_id": snapshot_id}
+    if SnapshotStatus(snapshot.status).is_terminal:
+        logger.info(
+            "Шаг отклонён: снимок закрыт",
+            snapshot_id=snapshot_id,
+            status=str(snapshot.status),
+        )
+        return {"status": "ALREADY_CLOSED", "snapshot_id": snapshot_id}
+    return None
+
+
 @celery_app.task(name="tmo.advance_snapshot", bind=True, time_limit=120)
 def advance_snapshot(self, snapshot_date: str | None = None) -> dict[str, Any]:
     """Диспетчер цикла: выдаёт ровно один следующий шаг.
@@ -343,6 +371,9 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
+        closed = _closed_snapshot(session, snapshot_id)
+        if closed is not None:
+            return closed
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
         target = snapshot.snapshot_date
 
@@ -411,6 +442,9 @@ def calculate_snapshot(self, snapshot_id: int | None = None,
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
+        closed = _closed_snapshot(session, snapshot_id)
+        if closed is not None:
+            return closed
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
         snapshot.status = SnapshotStatus.CALCULATING
 
@@ -445,6 +479,9 @@ def close_snapshot(self, snapshot_id: int | None = None,
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
+        closed = _closed_snapshot(session, snapshot_id)
+        if closed is not None:
+            return closed
 
     # Аренда на весь расчёт, а не на пятнадцать минут. Расчёт полной матрицы —
     # единственный вызов длиной в полчаса, продлевать аренду посреди него
