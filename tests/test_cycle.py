@@ -251,6 +251,50 @@ def test_closed_snapshot_asks_for_nothing(session) -> None:
         assert cycle.next_step(session, DAY, now=MIDDAY).step == cycle.STEP_IDLE
 
 
+@pytest.mark.parametrize(
+    "status", [SnapshotStatus.READY, SnapshotStatus.DEGRADED, SnapshotStatus.FAILED]
+)
+def test_operator_can_reopen_a_closed_snapshot_on_purpose(database: str, status) -> None:
+    """Запрет снимается явным признаком, и только им.
+
+    Без него у снимка в ``FAILED`` не осталось бы пути назад вовсе: диспетчер
+    терминальный снимок не трогает, а шаги отказываются с ним работать. Разница
+    между «оператор решил» и «прилетела потерянная задача» — единственное, что
+    эта проверка и выражает.
+    """
+    from tmo.db.session import session_scope
+    from tmo.tasks.collection import _closed_snapshot
+
+    with session_scope() as session:
+        snapshot_id = _snapshot(session, status=status).id
+
+    with session_scope() as session:
+        refused = _closed_snapshot(session, snapshot_id)
+        assert refused is not None and refused["status"] == "ALREADY_CLOSED"
+        assert _closed_snapshot(session, snapshot_id, force=True) is None
+
+
+def test_recovery_does_not_start_after_the_day_deadline(database: str) -> None:
+    """Досбор просроченного снимка не начинается и статуса не трогает.
+
+    Прежде начинался: переводил снимок в ``RECOVERING``, доходил до первой
+    пачки, останавливался по дедлайну и возвращал ноль собранного. Шаг,
+    заведомо неспособный ничего сделать, успевал снять снимок с витрины.
+    """
+    from tmo.db.session import session_scope
+    from tmo.tasks.collection import recover_snapshot
+
+    with session_scope() as session:
+        # Дата в прошлом: рубеж её суток истёк заведомо.
+        snapshot = _snapshot(session, status=SnapshotStatus.COLLECTING, day=date(2020, 1, 1))
+        snapshot_id = snapshot.id
+
+    assert recover_snapshot(snapshot_id=snapshot_id)["status"] == "DEADLINE_PASSED"
+    with session_scope() as session:
+        snapshot = session.get(models.MarketSnapshot, snapshot_id)
+        assert SnapshotStatus(snapshot.status) is SnapshotStatus.COLLECTING
+
+
 @pytest.mark.parametrize("status", [SnapshotStatus.READY, SnapshotStatus.DEGRADED])
 def test_late_step_does_not_reopen_a_published_snapshot(database: str, status) -> None:
     """Шаг, пришедший мимо диспетчера, обязан отказаться сам.

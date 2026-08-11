@@ -121,6 +121,41 @@ def test_unfinished_observation_blocks_the_first_gate(published) -> None:
     assert gate.violations[0].rule == "NO_TERMINAL_OUTCOME"
 
 
+def test_untouched_observation_is_a_shortfall_not_a_blocker(published) -> None:
+    """До наблюдения не дошли — это недобор, и судят его пороги, а не ворота.
+
+    Разница с проверкой выше принципиальна. ``RUNNING`` означает, что снимок
+    закрывают на ходу и цифры не окончательны, — публиковать нельзя. ``PLANNED``
+    означает, что сбор до наблюдения не дошёл и после рубежа суток уже не
+    дойдёт: недобор честный, его считает ``coverage.missing``, и решают пороги
+    покрытия.
+
+    Прежнее правило смешивало их и требовало ноль незавершённых вообще. Тогда
+    **любой** снимок, закрытый по рубежу с остатком, проваливал ворота — при
+    том что закрытие по рубежу ровно для случая «не всё успели» и существует.
+    В ночь на 11.08.2026 так отказали два стенда сразу, оба при покрытии выше
+    порога ``READY``.
+    """
+    with session_scope() as session:
+        job_id = session.scalar(
+            select(models.CollectionJob.id).where(
+                models.CollectionJob.snapshot_id == published.snapshot_id
+            )
+        )
+        session.execute(
+            update(models.CollectionJob)
+            .where(models.CollectionJob.id == job_id)
+            .values(status=JobStatus.PLANNED.value)
+        )
+    with session_scope() as session:
+        coverage = compute_coverage(session, published.snapshot_id)
+        gate = gate_collection_completeness(session, published.snapshot_id, coverage)
+
+    assert gate.passed is True, [v.as_dict() for v in gate.violations]
+    assert coverage.total.missing == 1
+    assert coverage.total.completion < 1.0
+
+
 def test_incomplete_dto_blocks_publication(published) -> None:
     """Пустая медиана у метрики с данными заставила бы фронтенд её досчитать."""
     with session_scope() as session:

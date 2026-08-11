@@ -127,8 +127,14 @@ def _current_snapshot_id(session, snapshot_date: date | None = None) -> int | No
     )
 
 
-def _closed_snapshot(session, snapshot_id: int) -> dict[str, Any] | None:
+def _closed_snapshot(session, snapshot_id: int, *, force: bool = False) -> dict[str, Any] | None:
     """Отказ работать со снимком, который уже закрыт.
+
+    ``force`` снимает запрет. Он существует для оператора, которому нужно
+    вернуть снимок из ``FAILED``: диспетчер терминальный снимок не тронет, и
+    без явного признака у такого возврата не осталось бы пути вовсе. Признак
+    именно явный — разница между «оператор решил» и «прилетела потерянная
+    задача» и есть всё содержание этой проверки.
 
     Диспетчер такого шага не выдаёт: ``cycle.next_step`` возвращает ``IDLE``
     для терминального снимка. Но шаг приходит не только от диспетчера. Задача,
@@ -145,14 +151,21 @@ def _closed_snapshot(session, snapshot_id: int) -> dict[str, Any] | None:
     snapshot = session.get(models.MarketSnapshot, snapshot_id)
     if snapshot is None:
         return {"status": "NO_SNAPSHOT", "snapshot_id": snapshot_id}
-    if SnapshotStatus(snapshot.status).is_terminal:
-        logger.info(
-            "Шаг отклонён: снимок закрыт",
+    if not SnapshotStatus(snapshot.status).is_terminal:
+        return None
+    if force:
+        logger.warning(
+            "Снимок закрыт, но шаг запрошен принудительно",
             snapshot_id=snapshot_id,
             status=str(snapshot.status),
         )
-        return {"status": "ALREADY_CLOSED", "snapshot_id": snapshot_id}
-    return None
+        return None
+    logger.info(
+        "Шаг отклонён: снимок закрыт",
+        snapshot_id=snapshot_id,
+        status=str(snapshot.status),
+    )
+    return {"status": "ALREADY_CLOSED", "snapshot_id": snapshot_id}
 
 
 @celery_app.task(name="tmo.advance_snapshot", bind=True, time_limit=120)
@@ -351,7 +364,9 @@ def collect_batch(self, job_ids: list[int], execution_scope: str = "PRIMARY",
 
 
 @celery_app.task(name="tmo.recover_snapshot", bind=True, time_limit=RECOVER_TIME_LIMIT)
-def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> dict[str, Any]:
+def recover_snapshot(
+    self, snapshot_id: int | None = None, rounds: int = 1, force: bool = False
+) -> dict[str, Any]:
     """Досбор технических дыр — один заход.
 
     Настойчивость обеспечивает не эта задача, а диспетчер: он выдаёт досбор
@@ -371,11 +386,24 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
-        closed = _closed_snapshot(session, snapshot_id)
+        closed = _closed_snapshot(session, snapshot_id, force=force)
         if closed is not None:
             return closed
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
         target = snapshot.snapshot_date
+
+    # Рубеж суток снимка — предел, до которого досбор вправе ходить к источнику.
+    # Истёк — заход не начинается вовсе. Прежде он начинался: переводил снимок в
+    # RECOVERING, доходил до первой пачки, останавливался по дедлайну «остаток
+    # остаётся дырами» и возвращал ноль собранного. Шаг, заведомо неспособный
+    # ничего сделать, успевал снять снимок с витрины.
+    if not force and cycle.day_deadline(target) <= now_utc():
+        logger.info(
+            "Досбор не начат: рубеж суток снимка истёк",
+            snapshot_id=snapshot_id,
+            snapshot_date=target.isoformat(),
+        )
+        return {"status": "DEADLINE_PASSED", "snapshot_id": snapshot_id}
 
     with lease.acquire(lease.collection_lease(target.isoformat())) as held:
         if held is None:
@@ -437,12 +465,13 @@ def recover_snapshot(self, snapshot_id: int | None = None, rounds: int = 1) -> d
 
 @celery_app.task(name="tmo.calculate_snapshot", bind=True, time_limit=2 * 3600)
 def calculate_snapshot(self, snapshot_id: int | None = None,
-                       profile_version: str | None = None) -> dict[str, Any]:
+                       profile_version: str | None = None,
+                       force: bool = False) -> dict[str, Any]:
     with session_scope() as session:
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
-        closed = _closed_snapshot(session, snapshot_id)
+        closed = _closed_snapshot(session, snapshot_id, force=force)
         if closed is not None:
             return closed
         snapshot = session.get(models.MarketSnapshot, snapshot_id)
@@ -465,7 +494,8 @@ def recalculate_snapshot(self, snapshot_id: int,
 
 @celery_app.task(name="tmo.close_snapshot", bind=True, time_limit=3 * 3600)
 def close_snapshot(self, snapshot_id: int | None = None,
-                   profile_version: str | None = None) -> dict[str, Any]:
+                   profile_version: str | None = None,
+                   force: bool = False) -> dict[str, Any]:
     """Расчёт и финализация одним шагом.
 
     Раздельные записи расписания на 09:00 и 09:30 разошлись с реальностью в
@@ -479,7 +509,7 @@ def close_snapshot(self, snapshot_id: int | None = None,
         snapshot_id = snapshot_id or _current_snapshot_id(session)
         if snapshot_id is None:
             return {"status": "NO_SNAPSHOT"}
-        closed = _closed_snapshot(session, snapshot_id)
+        closed = _closed_snapshot(session, snapshot_id, force=force)
         if closed is not None:
             return closed
 

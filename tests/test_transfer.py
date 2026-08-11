@@ -84,6 +84,37 @@ def test_import_creates_a_new_version_of_the_same_date(collected_snapshot, tmp_p
     assert versions == ["v2", "v1"], "обе версии обязаны быть видны витрине"
 
 
+def test_imported_version_does_not_displace_the_locally_collected_one(
+    collected_snapshot, tmp_path
+) -> None:
+    """По умолчанию витрина берёт свой сбор, а не привезённый.
+
+    Импорт занимает следующий свободный номер попытки, поэтому по номеру он
+    всегда старше собранного здесь. Выбор «последняя попытка» и означал
+    «привезённая»: 10.08.2026 витрина показывала за 09.08 копию с пилотного
+    стенда, хотя рядом лежал родной снимок того же дня. Совпали они по
+    случайности — копия и была снята с него.
+
+    Явно запрошенная версия по-прежнему отдаётся: подменять выбор пользователя
+    эта проверка не должна.
+    """
+    from tmo.db.session import session_scope
+    from tmo.services.showcase import resolve_context
+
+    with session_scope() as session:
+        _export(session, collected_snapshot.snapshot_id, tmp_path, SHOWCASE)
+    with session_scope() as session:
+        imported = import_snapshot(session, tmp_path / "bundle")
+
+    with session_scope() as session:
+        default = resolve_context(session, snapshot_date=DAY)
+        assert default.snapshot.id == collected_snapshot.snapshot_id
+        assert default.snapshot.source_digest is None
+
+        asked = resolve_context(session, snapshot_date=DAY, attempt_no=imported["attempt_no"])
+        assert asked.snapshot.id == imported["snapshot_id"]
+
+
 def test_imported_snapshot_renders_in_the_showcase(collected_snapshot, tmp_path) -> None:
     """Главная проверка: по загруженному снимку витрина отдаёт цифры.
 

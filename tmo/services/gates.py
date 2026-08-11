@@ -62,13 +62,34 @@ class GateResult:
 def gate_collection_completeness(
     session: Session, snapshot_id: int, coverage: CoverageReport
 ) -> GateResult:
-    """Ворота 1: у каждого запланированного наблюдения есть конечный исход."""
-    unfinished = session.execute(
+    """Ворота 1: сбор закончился сам, а не был прерван на ходу.
+
+    Блокирует только **работу в полёте** — ``DISPATCHED`` и ``RUNNING``.
+    Наблюдение в этих состояниях означает, что снимок закрывают, пока сбор ещё
+    идёт: цифры не окончательны, и публиковать их нельзя. Ровно это поймали
+    ворота 09.08.2026, когда готовность пустила снимок с 31 наблюдением в
+    работе.
+
+    ``PLANNED`` — не нарушение. До такого наблюдения сбор не дошёл, и после
+    рубежа суток уже не дойдёт: это честный недобор, а не незавершённая работа.
+    Его считает ``coverage.missing``, и судят пороги покрытия — 98 % на
+    ``READY``, 85 % на ``DEGRADED``. Они и существуют, чтобы решать, какой
+    недобор терпим.
+
+    Прежнее правило смешивало эти два состояния и требовало ноль незавершённых
+    вообще. Следствие было не редким случаем, а гарантией: **любой** снимок,
+    закрытый по рубежу с непройденным остатком, проваливал ворота — при том что
+    закрытие по рубежу для случая «не всё успели» и существует. В ночь на
+    11.08.2026 так отказали два стенда сразу, оба при покрытии выше порога
+    ``READY``: 98,86 % и 98,95 %. Годные снимки не публиковались, витрина
+    откатывалась на позавчерашний день.
+    """
+    in_flight = session.execute(
         select(models.CollectionJob.status, func.count(models.CollectionJob.id))
         .where(
             models.CollectionJob.snapshot_id == snapshot_id,
             models.CollectionJob.status.in_(
-                [JobStatus.PLANNED.value, JobStatus.DISPATCHED.value, JobStatus.RUNNING.value]
+                [JobStatus.DISPATCHED.value, JobStatus.RUNNING.value]
             ),
         )
         .group_by(models.CollectionJob.status)
@@ -80,7 +101,7 @@ def gate_collection_completeness(
             count=int(count),
             message=f"{count} наблюдений остались в состоянии {status}",
         )
-        for status, count in unfinished
+        for status, count in in_flight
     ]
 
     # Молчаливый пропуск источника: наблюдение завершено, но попыток нет.

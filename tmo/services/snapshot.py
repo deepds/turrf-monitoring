@@ -285,7 +285,7 @@ def latest_published(session: Session) -> models.MarketSnapshot | None:
         )
         .order_by(
             models.MarketSnapshot.snapshot_date.desc(),
-            models.MarketSnapshot.attempt_no.desc(),
+            *_provenance_order(),
         )
         .limit(1)
     ).first()
@@ -320,6 +320,14 @@ def snapshot_for_date(
     а не переписывает старый, и то же делает импорт снимка с другого стенда.
     Выбирать между ними обязан пользователь, а не запрос по умолчанию, — иначе
     импортированная попытка молча подменяет собранную здесь и наоборот.
+
+    Поэтому **свой сбор идёт раньше привезённого**, и лишь затем — последняя
+    попытка. Порядок по одному номеру попытки давал ровно ту подмену, от
+    которой предостерегает абзац выше: импорт берёт следующий свободный номер,
+    то есть всегда оказывается старше собранного здесь. 10.08.2026 витрина так
+    и показывала за 09.08 копию с пилотного стенда, хотя рядом лежал родной
+    снимок того же дня. Совпадали они по случайности — копия и была снята с
+    него, — но правило от этого не становится верным.
     """
     query = select(models.MarketSnapshot).where(
         models.MarketSnapshot.snapshot_date == snapshot_date
@@ -333,8 +341,20 @@ def snapshot_for_date(
             )
         )
     return session.scalars(
-        query.order_by(models.MarketSnapshot.attempt_no.desc()).limit(1)
+        query.order_by(*_provenance_order()).limit(1)
     ).first()
+
+
+def _provenance_order():
+    """Порядок предпочтения снимков одной даты: свой сбор, затем последний.
+
+    ``source_digest`` заполняется только при импорте, поэтому пустой он ровно у
+    того снимка, который собран на этом стенде.
+    """
+    return (
+        models.MarketSnapshot.source_digest.is_(None).desc(),
+        models.MarketSnapshot.attempt_no.desc(),
+    )
 
 
 def available_snapshot_dates(session: Session, *, limit: int = 60) -> list[dict[str, Any]]:
