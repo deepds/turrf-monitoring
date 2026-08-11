@@ -81,7 +81,11 @@ def test_import_creates_a_new_version_of_the_same_date(collected_snapshot, tmp_p
     with session_scope() as session:
         listed = available_snapshot_dates(session)
     versions = [v["label"] for v in listed[0]["versions"]]
-    assert versions == ["v2", "v1"], "обе версии обязаны быть видны витрине"
+    assert sorted(versions) == ["v1", "v2"], "обе версии обязаны быть видны витрине"
+    # Представителем даты идёт свой сбор, а не привезённое: список обязан
+    # совпадать с тем, что откроет витрина без явно выбранной версии.
+    assert listed[0]["label"] == "v1"
+    assert versions[0] == "v1"
 
 
 def test_imported_version_does_not_displace_the_locally_collected_one(

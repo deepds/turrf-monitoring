@@ -365,8 +365,10 @@ def available_snapshot_dates(session: Session, *, limit: int = 60) -> list[dict[
     Прежняя версия отдавала одну строку на снимок и не различала их вовсе —
     выбрать «ту, что собрана здесь» из витрины было нельзя.
 
-    Порядок внутри даты — по убыванию попытки: последняя первой. Она же
-    подставляется, когда попытка не указана явно.
+    Порядок внутри даты — тот же, что у ``snapshot_for_date``: свой сбор, затем
+    последняя попытка. Первая версия становится представителем даты, и она же
+    откроется, если попытку не указывать. Разойдись эти два порядка — список
+    показывал бы одну версию, а витрина открывала другую.
     """
     rows = session.execute(
         select(
@@ -384,7 +386,7 @@ def available_snapshot_dates(session: Session, *, limit: int = 60) -> list[dict[
         )
         .order_by(
             models.MarketSnapshot.snapshot_date.desc(),
-            models.MarketSnapshot.attempt_no.desc(),
+            *_provenance_order(),
         )
         .limit(limit)
     ).all()
