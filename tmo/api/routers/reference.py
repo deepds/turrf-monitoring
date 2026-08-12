@@ -143,6 +143,10 @@ def dictionary() -> dict[str, Any]:
             ExclusionReason.NOT_ROUND_TRIP.value: "Не круговой тариф",
             ExclusionReason.WRONG_PROPERTY_TYPE.value: "Не гостиница (апартаменты, хостел, гостевой дом)",
             ExclusionReason.WRONG_STARS.value: "Звёздность вне запрошенной категории",
+            ExclusionReason.WRONG_ROOM_CATEGORY.value: (
+                "Категория номера вне методики: люкс, апартаменты, студия "
+                "и подобные, а также нераспознанные названия"
+            ),
             ExclusionReason.WRONG_ROUTE.value: "Маршрут не соответствует запросу",
             ExclusionReason.WRONG_DATES.value: "Даты не соответствуют наблюдению",
             ExclusionReason.NON_POSITIVE_PRICE.value: "Цена отсутствует или неположительна",

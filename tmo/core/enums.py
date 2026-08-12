@@ -205,6 +205,9 @@ class ExclusionReason(StrEnum):
     NOT_ROUND_TRIP = "NOT_ROUND_TRIP"
     WRONG_PROPERTY_TYPE = "WRONG_PROPERTY_TYPE"
     WRONG_STARS = "WRONG_STARS"
+    #: Категория номера вне методики: люкс, апартаменты, студия и подобные.
+    #: Сюда же попадает нераспознанная категория — см. `on_unknown_room_category`.
+    WRONG_ROOM_CATEGORY = "WRONG_ROOM_CATEGORY"
     WRONG_ROUTE = "WRONG_ROUTE"
     WRONG_DATES = "WRONG_DATES"
     NON_POSITIVE_PRICE = "NON_POSITIVE_PRICE"

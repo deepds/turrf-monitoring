@@ -129,6 +129,7 @@ export const EXCLUSION_REASON: Record<string, string> = {
   NOT_ROUND_TRIP: 'Не круговой',
   WRONG_PROPERTY_TYPE: 'Не гостиница',
   WRONG_STARS: 'Не та звёздность',
+  WRONG_ROOM_CATEGORY: 'Не та категория номера',
   WRONG_ROUTE: 'Не тот маршрут',
   WRONG_DATES: 'Не те даты',
   NON_POSITIVE_PRICE: 'Нет цены',

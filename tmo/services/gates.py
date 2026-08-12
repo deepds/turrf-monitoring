@@ -22,8 +22,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from tmo.catalog.registry import MethodologyProfile
-from tmo.core.enums import CarType, CollectionFamily, JobStatus, MetricType, PropertyType
+from tmo.core.enums import CollectionFamily, JobStatus, MetricType, PropertyType
 from tmo.db import models
+from tmo.engine.selection import ROOM_ALLOWED, car_type_allowed, room_category
 from tmo.services.coverage import CoverageReport
 
 
@@ -173,6 +174,8 @@ def gate_data_validity(session: Session, run_id: int, profile: MethodologyProfil
 
     allowed_stars = {int(item) for item in profile.selection["hotel"]["stars"]}
     allowed_types = set(profile.selection["hotel"]["property_types"])
+    rail_rules = profile.selection["rail"]
+    hotel_rules = profile.selection["hotel"]
     base_currency = str(profile.aggregation.get("currency", "RUB"))
     seen_equivalence: dict[int, set[str]] = {}
 
@@ -206,7 +209,11 @@ def gate_data_validity(session: Session, run_id: int, profile: MethodologyProfil
             flag("DATES_MATCH_REQUEST", {**payload, "flags": flags})
 
         if kind == "RAIL":
-            if transport.get("car_type") != CarType.COMPARTMENT.value:
+            # Имя правила историческое: под baseline_v2 оно пропускает и
+            # сидячие места скоростных поездов. Переименовать нельзя, не сломав
+            # список критических правил у baseline_v1 — правило, которое код
+            # перестал испускать, молча перестало бы проверяться.
+            if not car_type_allowed(str(transport.get("car_type") or ""), transport, rail_rules):
                 flag("RAIL_COMPARTMENT_ONLY", {**payload, "car_type": transport.get("car_type")})
         elif kind == "AIR":
             if not transport.get("is_direct"):
@@ -223,6 +230,13 @@ def gate_data_validity(session: Session, run_id: int, profile: MethodologyProfil
                 flag("HOTEL_STARS_ALLOWED", {**payload, "stars": stars})
             if metric_stars is not None and stars is not None and int(stars) != int(metric_stars):
                 flag("HOTEL_STARS_ALLOWED", {**payload, "stars": stars, "metric": metric_stars})
+            room_name = str(property_info.get("room_name") or "")
+            verdict, _ = room_category(room_name, hotel_rules)
+            if verdict is not ROOM_ALLOWED:
+                flag(
+                    "HOTEL_ROOM_CATEGORY_ALLOWED",
+                    {**payload, "room_name": room_name, "verdict": verdict},
+                )
             if "PRICE_DERIVED_FROM_PER_NIGHT" in flags and metric_type in (
                 MetricType.HOTEL_STAY.value,
                 MetricType.HOTEL_STAY,

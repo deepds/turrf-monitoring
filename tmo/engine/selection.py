@@ -139,8 +139,7 @@ def _apply_rail(candidate: Candidate, rules: dict[str, Any]) -> Decision:
             candidate, False, ExclusionReason.UNCLASSIFIED_CAR_TYPE,
             "источник не сообщил тип вагона",
         )
-    required = str(rules.get("car_type") or CarType.COMPARTMENT.value)
-    if car_type != required:
+    if not car_type_allowed(car_type, transport, rules):
         return Decision(candidate, False, ExclusionReason.WRONG_CAR_TYPE, car_type)
 
     # Сервисный класс намеренно не фильтруется: `2К`/`2Д` — это тарифная
@@ -160,6 +159,48 @@ def _apply_rail(candidate: Candidate, rules: dict[str, Any]) -> Decision:
         if seats is not None and int(seats) <= 0:
             return Decision(candidate, False, ExclusionReason.NO_PLACES)
     return Decision(candidate, True)
+
+
+def car_types_allowed(rules: dict[str, Any]) -> set[str]:
+    """Типы вагонов, разрешённые профилем безусловно.
+
+    ``car_types`` — список; ``car_type`` — прежнее скалярное имя из
+    baseline_v1. Читаются оба, иначе первая же версия перестала бы считаться
+    той методикой, по которой её посчитали.
+    """
+    listed = rules.get("car_types")
+    if listed:
+        return {str(item) for item in listed}
+    return {str(rules.get("car_type") or CarType.COMPARTMENT.value)}
+
+
+def high_speed_trains(rules: dict[str, Any]) -> set[str]:
+    """Поезда, у которых сидячее место допускается наравне с купе."""
+    return {
+        str(name).strip().casefold()
+        for name in (rules.get("high_speed_seated_trains") or [])
+        if str(name).strip()
+    }
+
+
+def car_type_allowed(car_type: str, transport: dict[str, Any], rules: dict[str, Any]) -> bool:
+    """Годится ли вагон по методике.
+
+    Сидячее место допускается не по типу вагона, а по имени поезда.
+    ``SEDENTARY`` объединяет «Сапсан» со средней ценой 17 323 ₽ и пригородный
+    сидячий вагон за 292 ₽: разрешить тип целиком значило бы описать медианой
+    не рынок, а состав выдачи.
+
+    Именем ограничивается только сидячее место. Купе и СВ того же «Сапсана»
+    остаются за методикой: бизнес-класс за 103 000 ₽ — не тот рынок, о котором
+    показатель.
+    """
+    if car_type in car_types_allowed(rules):
+        return True
+    if car_type != CarType.SEDENTARY.value:
+        return False
+    train_name = str(transport.get("train_name") or "").strip().casefold()
+    return bool(train_name) and train_name in high_speed_trains(rules)
 
 
 def _apply_air(candidate: Candidate, rules: dict[str, Any]) -> Decision:
@@ -197,7 +238,57 @@ def _apply_hotel(candidate: Candidate, rules: dict[str, Any]) -> Decision:
     stars = info.get("stars")
     if stars is None or int(stars) not in allowed_stars:
         return Decision(candidate, False, ExclusionReason.WRONG_STARS, str(stars))
+
+    category, detail = room_category(str(info.get("room_name") or ""), rules)
+    if category is not ROOM_ALLOWED:
+        return Decision(candidate, False, ExclusionReason.WRONG_ROOM_CATEGORY, detail)
     return Decision(candidate, True)
+
+
+#: Исходы разбора категории номера.
+ROOM_ALLOWED = "ALLOWED"
+ROOM_EXCLUDED = "EXCLUDED"
+ROOM_UNKNOWN = "UNKNOWN"
+
+
+def room_category(room_name: str, rules: dict[str, Any]) -> tuple[str, str | None]:
+    """Категория номера по его названию — и почему именно такая.
+
+    Источник не отдаёт категорию отдельным полем. Ни выдача поиска, ни детали
+    предложения не содержат ни ``category``, ни ``class``: класс закодирован
+    словом внутри названия — Economy, Standard, Deluxe, люкс. Название и
+    остаётся единственным доступным признаком, и правило работает по нему.
+
+    Сравнение идёт через ``casefold`` в Python, а не в SQL: база создана с
+    ``--locale=C``, и ``ILIKE '%стандарт%'`` не находит «Стандарт». Тот же
+    фильтр, написанный запросом, молча не нашёл бы ничего.
+
+    Исключающий признак проверяется раньше разрешающего: «Номер делюкс»
+    содержит оба, и решает старший.
+    """
+    mode = str(rules.get("room_category_filter") or "NONE").upper()
+    if mode == "NONE":
+        return ROOM_ALLOWED, None
+
+    low = room_name.strip().casefold()
+    if not low:
+        return _unknown_room_verdict(rules, "название номера не сообщено")
+
+    for word in rules.get("excluded_room_keywords") or []:
+        marker = str(word).strip().casefold()
+        if marker and marker in low:
+            return ROOM_EXCLUDED, marker
+    for word in rules.get("allowed_room_keywords") or []:
+        marker = str(word).strip().casefold()
+        if marker and marker in low:
+            return ROOM_ALLOWED, None
+    return _unknown_room_verdict(rules, f"категория не опознана: {room_name.strip()[:80]}")
+
+
+def _unknown_room_verdict(rules: dict[str, Any], detail: str) -> tuple[str, str | None]:
+    if str(rules.get("on_unknown_room_category") or "EXCLUDE").upper() == "INCLUDE":
+        return ROOM_ALLOWED, None
+    return ROOM_UNKNOWN, detail
 
 
 def _collapse_fares(survivors: list[Decision], rules: dict[str, Any]) -> None:

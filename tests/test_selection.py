@@ -21,6 +21,11 @@ def profile():
     return methodology_profile("baseline_v1")
 
 
+@pytest.fixture()
+def profile_v2():
+    return methodology_profile("baseline_v2")
+
+
 def rail_candidate(
     ref: int,
     price: str,
@@ -74,7 +79,13 @@ def air_candidate(
 
 
 def hotel_candidate(
-    ref: int, price: str, *, stars: int = 4, property_type: str = "HOTEL", name: str = "Отель"
+    ref: int,
+    price: str,
+    *,
+    stars: int = 4,
+    property_type: str = "HOTEL",
+    name: str = "Отель",
+    room: str = "Номер стандарт",
 ) -> Candidate:
     return Candidate(
         ref=ref,
@@ -82,7 +93,12 @@ def hotel_candidate(
         price=Decimal(price),
         currency="RUB",
         equivalence_key=f"hotel-{ref}",
-        property_info={"stars": stars, "property_type": property_type, "name": name},
+        property_info={
+            "stars": stars,
+            "property_type": property_type,
+            "name": name,
+            "room_name": room,
+        },
     )
 
 
@@ -162,6 +178,59 @@ def test_only_compartment_survives(profile) -> None:
     result = run(candidates, CollectionFamily.RAIL, profile)
     assert [d.candidate.ref for d in result.included] == [1]
     assert {d.reason for d in result.excluded} == {ExclusionReason.WRONG_CAR_TYPE}
+
+
+def test_high_speed_seated_enters_the_sample_but_ordinary_seated_does_not(
+    profile_v2,
+) -> None:
+    """Сидячее место допускается по имени поезда, а не по типу вагона.
+
+    ``SEDENTARY`` объединяет «Сапсан» со средней ценой 17 323 ₽ и пригородный
+    сидячий вагон за 292 ₽ — разброс внутри типа в пятьдесят раз. Разрешить
+    тип целиком значило бы описать медианой не рынок, а состав выдачи.
+    """
+    candidates = [
+        rail_candidate(1, "6000", train="1", car_type="COMPARTMENT"),
+        rail_candidate(2, "17300", train="751", car_type="SEDENTARY", train_name="САПСАН"),
+        rail_candidate(3, "2800", train="723", car_type="SEDENTARY", train_name="ЛАСТОЧКА"),
+        rail_candidate(4, "292", train="6001", car_type="SEDENTARY"),
+        rail_candidate(5, "3200", train="2", car_type="RESERVED_SEAT"),
+    ]
+    result = run(candidates, CollectionFamily.RAIL, profile_v2)
+
+    assert [d.candidate.ref for d in result.included] == [1, 2]
+    assert {d.reason for d in result.excluded} == {ExclusionReason.WRONG_CAR_TYPE}
+
+
+def test_high_speed_allowance_covers_seated_only(profile_v2) -> None:
+    """Купе и СВ «Сапсана» остаются за методикой.
+
+    Бизнес-класс за 103 000 ₽ — не тот рынок, о котором показатель. Имя поезда
+    открывает дверь сидячему месту, а не поезду целиком.
+    """
+    candidates = [
+        rail_candidate(1, "103000", train="751", car_type="LUX", train_name="САПСАН"),
+        rail_candidate(2, "60000", train="751", car_type="SOFT", train_name="САПСАН"),
+    ]
+    result = run(candidates, CollectionFamily.RAIL, profile_v2)
+
+    assert not result.included
+    assert {d.reason for d in result.excluded} == {ExclusionReason.WRONG_CAR_TYPE}
+
+
+def test_baseline_v1_still_takes_compartment_only(profile) -> None:
+    """Прежняя версия не меняет поведения от появления новой.
+
+    На baseline_v1 ссылаются уже показанные цифры. Версия, поехавшая вслед за
+    кодом, переписала бы историю задним числом.
+    """
+    candidates = [
+        rail_candidate(1, "6000", train="1", car_type="COMPARTMENT"),
+        rail_candidate(2, "17300", train="751", car_type="SEDENTARY", train_name="САПСАН"),
+    ]
+    result = run(candidates, CollectionFamily.RAIL, profile)
+
+    assert [d.candidate.ref for d in result.included] == [1]
 
 
 def test_service_class_is_not_filtered(profile) -> None:
@@ -252,6 +321,67 @@ def test_apartment_never_enters_hotel_sample(profile) -> None:
 def test_wrong_stars_are_excluded(profile) -> None:
     result = run([hotel_candidate(1, "3000", stars=2)], CollectionFamily.HOTEL, profile)
     assert result.excluded[0].reason is ExclusionReason.WRONG_STARS
+
+
+def test_premium_room_categories_are_excluded_by_name(profile_v2) -> None:
+    """Категория номера берётся из названия — другого признака источник не даёт.
+
+    Ни выдача поиска, ни детали предложения не содержат ни ``category``, ни
+    ``class``: класс закодирован словом внутри названия. Проверено на живом
+    ответе Туту 12.08.2026.
+    """
+    candidates = [
+        hotel_candidate(1, "5000", room="Двухместный номер Standard"),
+        hotel_candidate(2, "5200", room="Бюджетный двухместный номер без окна"),
+        hotel_candidate(3, "5400", room="Номер комфорт с 1 двуспальной кроватью"),
+        hotel_candidate(4, "12000", room="Двухместный номер Deluxe"),
+        hotel_candidate(5, "24000", room="Двухместный люкс c 1 комнатой"),
+        hotel_candidate(6, "9000", room="Апартаменты c 1 комнатой"),
+        hotel_candidate(7, "7000", room="Студия"),
+    ]
+    result = run(candidates, CollectionFamily.HOTEL, profile_v2)
+
+    assert [d.candidate.ref for d in result.included] == [1, 2, 3]
+    assert {d.reason for d in result.excluded} == {ExclusionReason.WRONG_ROOM_CATEGORY}
+
+
+def test_premium_marker_wins_over_basic_one(profile_v2) -> None:
+    """«Номер делюкс» содержит оба признака, и решает старший."""
+    result = run(
+        [hotel_candidate(1, "15000", room="Номер делюкс с 1 двуспальной кроватью")],
+        CollectionFamily.HOTEL,
+        profile_v2,
+    )
+    assert not result.included
+    assert result.excluded[0].reason is ExclusionReason.WRONG_ROOM_CATEGORY
+
+
+def test_unrecognised_room_category_is_excluded_with_its_name(profile_v2) -> None:
+    """Не опознали — не берём, и в детализации видно что именно.
+
+    В эту долю попадают «Панорама Роял» и «SKY VIEW», но также «Однокомнатная
+    квартира на улице…» и «1-местная капсула» — то есть не номера гостиницы
+    вовсе. Люкс, попавший в медиану молча, дороже потерянного наблюдения.
+    """
+    result = run(
+        [hotel_candidate(1, "26000", room="Панорама Роял")],
+        CollectionFamily.HOTEL,
+        profile_v2,
+    )
+    assert not result.included
+    decision = result.excluded[0]
+    assert decision.reason is ExclusionReason.WRONG_ROOM_CATEGORY
+    assert "Панорама Роял" in (decision.detail or "")
+
+
+def test_baseline_v1_does_not_look_at_room_category(profile) -> None:
+    """Прежняя версия про категорию номера ничего не знает и знать не должна."""
+    result = run(
+        [hotel_candidate(1, "24000", room="Двухместный люкс c 1 комнатой")],
+        CollectionFamily.HOTEL,
+        profile,
+    )
+    assert [d.candidate.ref for d in result.included] == [1]
 
 
 def test_metric_takes_only_its_own_star_category() -> None:

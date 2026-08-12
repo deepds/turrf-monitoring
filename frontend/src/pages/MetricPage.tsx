@@ -34,7 +34,10 @@ import { dateLabel, dateTimeLabel, money, moneyPrecise, percent } from '../forma
 import { exclusionReason, outcome } from '../labels';
 
 const METRIC_TYPE_LABEL: Record<string, string> = {
-  RAIL_LEG: 'ЖД, плечо в одну сторону, купе, 1 пассажир',
+  // Состав вагонов задаётся версией методики, а подпись статична: под
+  // baseline_v2 к купе добавлены сидячие места скоростных поездов. Что вошло
+  // в конкретный расчёт, видно в списке предложений ниже.
+  RAIL_LEG: 'ЖД, плечо в одну сторону, 1 пассажир',
   AIR_ROUND_TRIP: 'Авиа, настоящий круговой тариф, эконом, прямой, 1 пассажир',
   HOTEL_STAY: 'Проживание, настоящая бронь на весь срок, 1 взрослый, 1 номер',
   HOTEL_NIGHT: 'Проживание, одна ночь, 1 взрослый, 1 номер',

@@ -155,8 +155,20 @@ class MethodologyProfile(BaseModel):
             if block not in value:
                 raise MethodologyError(f"В профиле отсутствует блок selection.{block}")
         rail = value["rail"]
-        if rail.get("car_type") != "COMPARTMENT":
-            raise MethodologyError("MVP считает только купе: selection.rail.car_type=COMPARTMENT")
+        # Безусловно допустимый тип — только купе. Сидячее место открывается
+        # поимённым списком `high_speed_seated_trains`, и это не придирка к
+        # форме записи: `SEDENTARY` объединяет «Сапсан» со средней ценой
+        # 17 323 ₽ и пригородный сидячий вагон за 292 ₽. Разрешить тип целиком
+        # значило бы расширить выборку в пятьдесят раз по цене одной строки в
+        # профиле — ровно то, от чего эта проверка и стоит.
+        unconditional = {
+            str(item) for item in (rail.get("car_types") or [rail.get("car_type")]) if item
+        }
+        if unconditional != {"COMPARTMENT"}:
+            raise MethodologyError(
+                "Безусловно допускается только купе: selection.rail.car_types=[COMPARTMENT]. "
+                "Сидячее место открывается списком high_speed_seated_trains, а не типом вагона"
+            )
         if rail.get("trip_type") != "ONE_WAY":
             raise MethodologyError(
                 "ЖД наблюдается плечом: selection.rail.trip_type должен быть ONE_WAY"
