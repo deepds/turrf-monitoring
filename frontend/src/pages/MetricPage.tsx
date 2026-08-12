@@ -318,13 +318,26 @@ export function MetricPage({ dictionary }: { dictionary?: Dictionary }) {
             {
               key: 'route',
               label: 'Наблюдение',
-              children: [
-                details.observation.origin?.name,
-                details.observation.destination?.name,
-                details.observation.city?.name,
-              ]
-                .filter(Boolean)
-                .join(' → '),
+              // Звёздность — измерение матрицы проживания наравне с городом и
+              // датой, и без неё экран не объясняет сам себя: строка «3★ ·
+              // Стандарт плюс» с пометкой «не та звёздность» выглядит ошибкой
+              // отбора, пока не видно, что метрика четырёхзвёздочная.
+              children: (
+                <Space size={6}>
+                  <span>
+                    {[
+                      details.observation.origin?.name,
+                      details.observation.destination?.name,
+                      details.observation.city?.name,
+                    ]
+                      .filter(Boolean)
+                      .join(' → ')}
+                  </span>
+                  {details.observation.stars != null && (
+                    <Tag>{details.observation.stars}★</Tag>
+                  )}
+                </Space>
+              ),
             },
             {
               key: 'dates',
