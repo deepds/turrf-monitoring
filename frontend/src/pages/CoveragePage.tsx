@@ -26,7 +26,14 @@ import type { ColumnsType } from 'antd/es/table';
 import { api } from '../api/client';
 import type { CoverageResponse, FamilyCoverage, SnapshotListItem } from '../api/types';
 import { dateLabel, dateTimeLabel, percent } from '../format';
-import { confidence, metricType, outcome, snapshotStatus } from '../labels';
+import {
+  confidence,
+  metricType,
+  outcome,
+  publicationNote,
+  snapshotStatus,
+  validationRule,
+} from '../labels';
 
 //: Исходы, в которых виноват источник. Остальные — наши решения перестать
 //: спрашивать, и красным их помечать неверно.
@@ -200,7 +207,12 @@ export function CoveragePage({ snapshots }: { snapshots: SnapshotListItem[] }) {
                 key={note.code}
                 type={note.severity === 'CRITICAL' ? 'error' : 'warning'}
                 showIcon
-                message={note.message}
+                message={publicationNote(note.code, note.message)}
+                description={
+                  note.violations?.length
+                    ? note.violations.map(validationRule).join(' · ')
+                    : undefined
+                }
               />
             ))}
 

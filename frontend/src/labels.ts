@@ -147,6 +147,69 @@ export function exclusionReason(code: string): string {
   return EXCLUSION_REASON[code] ?? code;
 }
 
+/**
+ * Ворота публикации — коротко, для полосы над витриной.
+ *
+ * Сервер отдаёт запись вида «Ворота COLLECTION_COMPLETENESS не пройдены»:
+ * половина фразы по-русски, половина именем перечисления. Имя остаётся в
+ * `publication_notes` как есть — на записи ссылаются прошлые снимки, — а
+ * читается человеку отсюда.
+ */
+export const GATE: Record<string, string> = {
+  COLLECTION_COMPLETENESS: 'полнота сбора',
+  DATA_VALIDITY: 'достоверность данных',
+  CALCULATION_VALIDITY: 'правильность расчёта',
+  PUBLICATION_VALIDITY: 'пригодность к публикации',
+};
+
+export function gate(code: string): string {
+  return GATE[code] ?? code;
+}
+
+/**
+ * Правила проверки — то, что перечисляется в нарушениях ворот.
+ *
+ * Формулировка называет нарушенное требование, а не проступок: правило
+ * `PRICE_POSITIVE` нарушено, когда цена неположительна, и подпись говорит
+ * именно это.
+ */
+export const VALIDATION_RULE: Record<string, string> = {
+  NO_TERMINAL_OUTCOME: 'наблюдения остались в работе',
+  SILENT_SOURCE_SKIP: 'завершено без обращения к источнику',
+  PRICE_POSITIVE: 'цена неположительна',
+  CURRENCY_MATCHES_PROFILE: 'валюта не та, что в методике',
+  ROUTE_MATCHES_REQUEST: 'маршрут не совпал с запросом',
+  DATES_MATCH_REQUEST: 'даты не совпали с запросом',
+  RAIL_COMPARTMENT_ONLY: 'тип вагона вне методики',
+  AIR_DIRECT_ONLY: 'рейс не прямой',
+  AIR_ROUND_TRIP_NOT_SYNTHESIZED: 'круговой тариф собран из двух односторонних',
+  HOTEL_PROPERTY_TYPE_ALLOWED: 'тип размещения вне методики',
+  HOTEL_STARS_ALLOWED: 'звёздность вне запрошенной',
+  HOTEL_ROOM_CATEGORY_ALLOWED: 'категория номера вне методики',
+  HOTEL_STAY_NOT_DERIVED_FROM_NIGHTS: 'цена срока получена умножением цены ночи',
+  NO_DUPLICATE_EQUIVALENCE_KEY: 'одно предложение учтено дважды',
+  PAGINATION_STATUS_KNOWN: 'полнота выдачи источника неизвестна',
+  GOLDEN_DATASET: 'Golden Dataset не сошёлся',
+  METRIC_DTO_COMPLETE: 'метрика отдана без обязательного поля',
+  PROVENANCE_PRESENT: 'цену нельзя раскрыть до исходного предложения',
+};
+
+export function validationRule(code: string): string {
+  return VALIDATION_RULE[code] ?? code;
+}
+
+/**
+ * Запись публикации целиком: сообщение сервера с переведённым именем ворот.
+ *
+ * Проценты и числа сервер считает сам и кладёт в текст — переписывать его
+ * целиком значило бы их потерять. Поэтому заменяется только имя.
+ */
+export function publicationNote(code: string, message: string): string {
+  if (!code.startsWith('GATE_')) return message;
+  const name = gate(code.slice('GATE_'.length));
+  return `Не пройдены ворота: ${name}`;
+}
+
 /** Семейство наблюдений. */
 export const FAMILY: Record<string, string> = {
   RAIL: 'Железная дорога',

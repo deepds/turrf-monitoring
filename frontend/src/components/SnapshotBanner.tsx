@@ -19,9 +19,15 @@
  */
 
 import { Alert, Descriptions, Space, Tag, Typography } from 'antd';
-import type { SnapshotContext } from '../api/types';
+import type { PublicationNote, SnapshotContext } from '../api/types';
 import { dateLabel, dateTimeLabel, percent } from '../format';
-import { snapshotStatus } from '../labels';
+import { publicationNote, snapshotStatus, validationRule } from '../labels';
+
+/** Нарушенные правила под записью: без них «ворота не пройдены» ничего не говорит. */
+function noteViolations(note: PublicationNote): string | undefined {
+  if (!note.violations?.length) return undefined;
+  return note.violations.map(validationRule).join(' · ');
+}
 
 export function SnapshotBanner({ context }: { context: SnapshotContext }) {
   const status = snapshotStatus(context.status);
@@ -68,10 +74,22 @@ export function SnapshotBanner({ context }: { context: SnapshotContext }) {
         />
       )}
       {critical.map((note) => (
-        <Alert key={note.code} type="error" showIcon message={note.message} />
+        <Alert
+          key={note.code}
+          type="error"
+          showIcon
+          message={publicationNote(note.code, note.message)}
+          description={noteViolations(note)}
+        />
       ))}
       {warnings.map((note) => (
-        <Alert key={note.code} type="warning" showIcon message={note.message} />
+        <Alert
+          key={note.code}
+          type="warning"
+          showIcon
+          message={publicationNote(note.code, note.message)}
+          description={noteViolations(note)}
+        />
       ))}
 
       <Descriptions
