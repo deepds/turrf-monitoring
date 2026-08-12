@@ -144,6 +144,18 @@ def register_methodology(session: Session, profile: MethodologyProfile) -> str:
         row.title = profile.title
         row.effective_from = profile.effective_from
         row.registered_at = now_utc()
+
+    # Версия обязана существовать в базе к возврату из этой функции, а не к
+    # концу транзакции. `CalculationRun.methodology_version` — простой внешний
+    # ключ без ORM-отношения, поэтому порядок вставки внутри одного flush
+    # SQLAlchemy не выводит: расчёт мог отправиться в базу раньше версии, на
+    # которую ссылается.
+    #
+    # На уже зарегистрированной версии это незаметно — строка есть с прошлого
+    # раза. Ломается ровно на первом применении новой: 12.08.2026 первый
+    # сравнительный расчёт по baseline_v2 упал с ForeignKeyViolation вместо
+    # того, чтобы посчитаться.
+    session.flush()
     return content_hash
 
 

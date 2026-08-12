@@ -12,7 +12,13 @@ from datetime import date, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from tmo.catalog.registry import methodology_profile
 from tmo.services.pipeline import run_daily_pipeline
+
+#: Активная версия методики, а не её имя на сегодня. Зашитая строка ломала бы
+#: эти тесты при каждой смене правил — притом что проверяют они не методику, а
+#: то, что версия вообще доезжает до ответа.
+ACTIVE_VERSION = methodology_profile().version
 
 SNAPSHOT = date(2026, 8, 7)
 HORIZON = 3
@@ -51,7 +57,7 @@ def test_latest_snapshot_exposes_status_and_coverage(client: TestClient) -> None
     assert body["status"] in ("READY", "DEGRADED")
     assert body["is_synthetic"] is True
     assert 0.0 <= body["coverage_total"] <= 1.0
-    assert body["methodology_version"] == "baseline_v1"
+    assert body["methodology_version"] == ACTIVE_VERSION
     assert "overview" in body
 
 
@@ -159,7 +165,7 @@ def test_metric_details_and_offers(client: TestClient) -> None:
 
     details = client.get(f"/api/v1/metrics/{metric_id}").json()
     assert details["metric_id"] == metric_id
-    assert details["methodology_version"] == "baseline_v1"
+    assert details["methodology_version"] == ACTIVE_VERSION
     assert details["fetched_at"]
     assert details["source_attempts"]
 
@@ -218,8 +224,13 @@ def test_reference_endpoints(client: TestClient) -> None:
     assert cities["known_market_gaps"]
 
     methodology = client.get("/api/v1/reference/methodology").json()
-    assert methodology["version"] == "baseline_v1"
-    assert methodology["selection"]["rail"]["car_type"] == "COMPARTMENT"
+    assert methodology["version"] == ACTIVE_VERSION
+    # Безусловно допустимый тип вагона — только купе. Сидячее место методика
+    # открывает поимённым списком поездов, а не расширением типа: проверяется
+    # инвариант, а не то, каким ключом он записан в текущей версии.
+    rail = methodology["selection"]["rail"]
+    unconditional = set(rail.get("car_types") or [rail.get("car_type")])
+    assert unconditional == {"COMPARTMENT"}
 
     dictionary = client.get("/api/v1/reference/dictionary").json()
     # Код без расшифровки на экране бесполезен.

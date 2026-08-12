@@ -2,10 +2,10 @@
  "parsed_offers": 30,
  "normalized_offers": 30,
  "dropped_without_price": 0,
- "included_offers": 27,
- "excluded_offers": 3,
+ "included_offers": 22,
+ "excluded_offers": 8,
  "exclusion_reasons": {
-  "WRONG_PROPERTY_TYPE": 2,
-  "STATISTICAL_OUTLIER": 1
+  "WRONG_ROOM_CATEGORY": 6,
+  "WRONG_PROPERTY_TYPE": 2
  }
 }

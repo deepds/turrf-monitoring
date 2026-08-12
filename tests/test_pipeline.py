@@ -12,6 +12,7 @@ from datetime import date
 import pytest
 from sqlalchemy import func, select
 
+from tmo.catalog.registry import methodology_profile
 from tmo.core.enums import CollectionFamily, JobStatus, MetricType, SnapshotStatus
 from tmo.db import models
 from tmo.db.session import session_scope
@@ -127,7 +128,7 @@ def test_metric_provenance_reaches_the_raw_response(pipeline) -> None:
         details = metric_details(session, metric.id)
         offers = metric_offers(session, metric.id)
 
-    assert details["methodology_version"] == "baseline_v1"
+    assert details["methodology_version"] == methodology_profile().version
     assert details["median_price"] is not None
     assert details["fetched_at"] is not None
     assert offers
@@ -272,3 +273,54 @@ def test_repeated_calculation_of_one_methodology_leaves_one_run(database: str) -
     assert links_after == links_before, (
         f"связей стало {links_after} вместо {links_before} — прежние не удалены"
     )
+
+
+def test_first_calculation_of_a_new_methodology_version_works(database: str) -> None:
+    """Впервые применённая версия методики считается, а не падает.
+
+    ``CalculationRun.methodology_version`` — простой внешний ключ без
+    ORM-отношения, поэтому порядок вставки внутри одного flush SQLAlchemy не
+    выводит: расчёт мог отправиться в базу раньше версии, на которую ссылается.
+
+    На уже зарегистрированной версии это незаметно — строка есть с прошлого
+    раза, — и ломается ровно на первом применении новой. 12.08.2026 первый
+    сравнительный расчёт по baseline_v2 упал с ForeignKeyViolation вместо того,
+    чтобы посчитаться.
+    """
+    from sqlalchemy import select
+
+    from tmo.catalog.registry import available_profiles
+    from tmo.core.enums import CollectionFamily
+    from tmo.db import models
+    from tmo.db.session import session_scope
+    from tmo.services.calculation import calculate_snapshot
+    from tmo.services.pipeline import run_daily_pipeline
+
+    report = run_daily_pipeline(
+        snapshot_date=date(2026, 8, 9),
+        horizon_days=3,
+        families=(CollectionFamily.RAIL,),
+        replay_mode="synthetic",
+        is_synthetic=True,
+    )
+
+    # Любая версия, кроме активной: прогон выше зарегистрировал только её.
+    active = methodology_profile().version
+    other = next(v for v in available_profiles() if v != active)
+
+    with session_scope() as session:
+        assert (
+            session.get(models.MethodologyProfileRecord, other) is None
+        ), "тест проверяет первое применение версии — она не должна быть зарегистрирована"
+        calculate_snapshot(session, report.snapshot_id, profile_version=other)
+
+    with session_scope() as session:
+        assert session.get(models.MethodologyProfileRecord, other) is not None
+        versions = set(
+            session.scalars(
+                select(models.CalculationRun.methodology_version).where(
+                    models.CalculationRun.snapshot_id == report.snapshot_id
+                )
+            )
+        )
+    assert versions == {active, other}
